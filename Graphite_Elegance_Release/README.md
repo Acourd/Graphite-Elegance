@@ -22,7 +22,7 @@ A premium, minimalist custom icon pack for Windows desktops. Designed to harmoni
 
 **Option A — one-click installer (recommended)**
 
-Right-click `Tools\Install.ps1` → **Run with PowerShell**.  
+Double-click `Tools\Install.bat`.  
 It installs the required dependency and applies the icons automatically.
 
 **Option B — manual pip**

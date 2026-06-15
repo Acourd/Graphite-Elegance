@@ -3,7 +3,7 @@ Lumina Frost — Icon Applicator
 Scans your Desktop shortcuts (.lnk / .url) and applies matching icons automatically.
 
 Windows only.
-Requirements:  pip install pypiwin32   (or run Tools\Install.ps1)
+Requirements:  pip install pypiwin32   (or run Tools\Install.bat)
 Usage:         python Tools\apply_desktop_icons.py
 """
 import sys
@@ -22,14 +22,29 @@ try:
 except ImportError:
     print("Error: pypiwin32 is not installed.")
     print("       Run:  pip install pypiwin32")
-    print("       Or double-click:  Tools\\Install.ps1")
+    print("       Or double-click:  Tools\\Install.bat")
     raise SystemExit(1)
 
-_SHCNE_ASSOCCHANGED = 0x08000000
+# SHChangeNotify constants
+_SHCNE_UPDATEITEM   = 0x00002000   # notify Explorer that a specific file changed
+_SHCNE_ASSOCCHANGED = 0x08000000   # global flush at the end
+_SHCNF_PATH         = 0x0001
+_SHCNF_FLUSHNOWAIT  = 0x1000
 _SHCNF_IDLIST       = 0x0000
 
 
+def _notify_file(path):
+    """Tell Explorer to reload the icon for one specific shortcut."""
+    ctypes.windll.shell32.SHChangeNotify(
+        _SHCNE_UPDATEITEM,
+        _SHCNF_PATH | _SHCNF_FLUSHNOWAIT,
+        ctypes.c_wchar_p(path),
+        None,
+    )
+
+
 def _notify_shell():
+    """Global icon-cache flush after all changes are done."""
     ctypes.windll.shell32.SHChangeNotify(_SHCNE_ASSOCCHANGED, _SHCNF_IDLIST, None, None)
 
 
@@ -93,6 +108,7 @@ def apply_icons_to_desktop():
                     if sc.IconLocation != loc:
                         sc.IconLocation = loc
                         sc.Save()
+                        _notify_file(path)
                         print(f"  [OK] {os.path.basename(path)}  →  {os.path.basename(icon_path)}")
                         applied += 1
 
@@ -117,6 +133,7 @@ def apply_icons_to_desktop():
 
                     with open(path, "w", encoding="utf-8") as fh:
                         fh.writelines(lines)
+                    _notify_file(path)
                     print(f"  [OK] {os.path.basename(path)}  →  {os.path.basename(icon_path)}")
                     applied += 1
 
