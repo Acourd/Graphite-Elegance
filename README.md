@@ -12,14 +12,14 @@ Two companion themes for Windows desktops. Both share the same squircle base sha
 ## Themes
 
 ### Graphite Elegance
-Dark squircle with a subtle top-to-bottom gradient (#2D2D2D → #0A0A0A), 1 px inner border, and a dual drop shadow under each logo. Designed for dark-mode setups and clean desktop aesthetics.
+Dark squircle with a subtle top-to-bottom gradient.
 
 ![Graphite Elegance preview](Graphite_Elegance_Release/preview.png)
 
 → [Graphite\_Elegance\_Release/](Graphite_Elegance_Release/)
 
 ### Lumina Frost
-Inverted companion: bright white squircle (#FFFFFF → #F5F5F5) with a dark logo (#191919). No border or shadow — the contrast does the work. Designed for light-mode or minimal setups.
+Inverted companion: bright white squircle with a dark logo. Designed for light-mode or minimal setups.
 
 ![Lumina Frost preview](Lumina_Frost_Release/preview.png)
 
