@@ -1,0 +1,12 @@
+# Themes not yet released
+Papirus_Windows/
+Void_Onyx/
+
+# OS artifacts
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
