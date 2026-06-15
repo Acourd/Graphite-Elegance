@@ -45,7 +45,7 @@ README.md
 ## Quick start
 
 **One-click (recommended)**
-Right-click `Tools\Install.ps1` inside either theme folder → **Run with PowerShell**.
+Double-click `Tools\Install.bat` inside either theme folder.
 The script installs the required dependency and applies icons automatically.
 
 **Manual**
