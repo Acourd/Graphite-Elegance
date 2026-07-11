@@ -86,5 +86,3 @@ AI Studio · Aimlabs · Antigravity · ATLauncher · Blitz · Canva · Ccleaner 
 - **Source:** each logo is extracted as a binary silhouette via CIELab or alpha-channel analysis
 
 ---
-
-*Created by Ayco.*
