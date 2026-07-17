@@ -1,3 +1,3 @@
 @echo off
-powershell.exe -ExecutionPolicy Bypass -NoProfile -File "%~dp0Install.ps1"
+py -3 "%~dp0apply_desktop_icons.py" || python "%~dp0apply_desktop_icons.py"
 if errorlevel 1 pause
