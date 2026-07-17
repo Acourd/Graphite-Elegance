@@ -1,88 +1,69 @@
-# Desktop Icon Pack — Windows
+# Isoform — Aesthetic Windows Icon Suites 🌑✨
+*Created by [Acourd](https://github.com/Acourd)*
 
-Two companion themes for Windows desktops. Both share the same squircle base shape and visual pipeline; they differ in color scheme (and a couple of icons).
+A collection of premium, highly precise, and geometric icon suites designed to bring absolute visual discipline, clean shapes, and minimal contrast to Windows desktops. 
 
-| Theme | Style | Icons |
-|-------|-------|-------|
-| **Graphite Elegance** | Dark charcoal background · white silhouette logos | 56 |
-| **Lumina Frost** | Bright white background · dark silhouette logos | 54 |
+Inspired by the concept of **precision, tactical geometry, and clean borders** (reminiscent of the aesthetic of *ISO* from Valorant), the **Isoform** suite features mathematical squircles (23% border radius) with sharp, solid-white masks and deep vertical gradients.
 
 ---
 
-## Themes
+## 🎨 The Icon Suites
 
-### Graphite Elegance
-Dark squircle with a subtle top-to-bottom gradient.
+Currently, **Isoform** includes 4 unique color palettes designed to fit different desktop themes and wallpaper moods:
 
-![Graphite Elegance preview](Graphite_Elegance_Release/preview.png)
-
-→ [Graphite\_Elegance\_Release/](Graphite_Elegance_Release/)
-
-### Lumina Frost
-Inverted companion: bright white squircle with a dark logo. Designed for light-mode or minimal setups.
-
-![Lumina Frost preview](Lumina_Frost_Release/preview.png)
-
-→ [Lumina\_Frost\_Release/](Lumina_Frost_Release/)
+| Suite | Aesthetic | Background Gradient | Border / Logo Accent |
+| :--- | :--- | :--- | :--- |
+| **Graphite Elegance** | Minimalist Dark | #2D2D2D ➔ #0A0A0A | White / Light Shadow |
+| **Lumina Frost** | Crisp Light Mode | #FFFFFF ➔ #F5F5F5 | Charcoal / Solid Dark |
+| **Midnight Ooo** | Deep Neon/Dark | #1B133A ➔ #0F0A1E | Orange / Neon Pink Border |
+| **Horizon Glow** | Warm White/Beige | #FFF8EB ➔ #FFF5E6 | Indigo / Gold Accent Border |
 
 ---
 
-## What's included
+## 📂 Repository Structure
 
-Each theme folder contains:
-
-```
-Icons/
-  ICO/          ← multi-resolution .ico files (256 · 128 · 64 · 48 · 32 · 16 px)
-Tools/
-  apply_desktop_icons.py    ← auto-applies icons to Desktop shortcuts
-  Install.ps1               ← installs the Python dependency + runs the script
-README.md
+Each theme release folder is fully self-contained:
+```text
+[Theme_Name]_Release/
+│
+├── Icons/
+│   ├── ICO/          ← Multi-resolution Windows .ico (256, 128, 64, 48, 32, 16 px)
+│   └── PNG/          ← High-definition transparent assets for docks or Linux
+│
+├── Tools/
+│   └── apply_desktop_icons.py    ← Automator script with custom duplicate cleanup
+│
+└── Apply_Theme.ps1   ← PowerShell launcher (Right-click ➔ Run with PowerShell)
 ```
 
 ---
 
-## Quick start
+## 🚀 Quick Start (Apply Instantly)
 
-**One-click (recommended)**
-Double-click `Tools\Install.bat` inside either theme folder.
-The script installs the required dependency and applies icons automatically.
+### The Automated Way (Recommended)
+1. Open the folder of the theme you want to apply (e.g., `Graphite_Elegance_Release`).
+2. Right-click **`Apply_Theme.ps1`** and select **"Run with PowerShell"**.
+3. The script will automatically scan your desktop (including games and hidden public shortcuts), apply the matching custom icons, rename shortcuts to **invisible names** for a clean aesthetic, and restart Windows Explorer to refresh the cache.
 
-**Manual**
-```cmd
-pip install pypiwin32
-python Tools\apply_desktop_icons.py
-```
-
-The script scans your Desktop (user + public) and applies the matching icon to every `.lnk` and `.url` shortcut it finds. Unmatched shortcuts are listed at the end.
-
-> **Windows only.** Requires Python 3 installed on your system.
+### Anti-Duplication Safeguard
+Some game launchers (like Steam, Riot, Epic, or Rockstar) will try to automatically recreate their original visible shortcuts on startup. **Isoform's** applicator includes a detection engine: if it detects a visible shortcut that already has a corresponding invisible, themed counterpart, it will delete the visible duplicate automatically to keep your desktop pristine.
 
 ---
 
-## Icon list
+## 🛠️ Technical Specifications
 
-<details>
-<summary>Graphite Elegance — 56 icons</summary>
-
-AI Studio · Aimlabs · Antigravity · ATLauncher · Blitz · Canva · Ccleaner · Chatgpt · Chrome · Classroom · Claude Ai · Discord · Edge · Epic Games · Excel · Geek Uninstaller · Gemini · Github · Gmail · Go · Helium · Images · Iso · Kindle · Kovacks · Labymod · Linkedin · Lossless Scaling · Medal · Mem Reduct · Minecraft · Minecraft V2 · Mini Cozy Room · Msiafterburner · NotebookLM · Nvidia App · Obs · Olympus · Opendesign · Perplexity · Pinterest · Powerpoint · Process Lasso · Reddit · Riot Client · Roblox · Spotify · Steam · Terraria · tModLoader · Valorant · Valorant Tracker · Vscode · Wallpaper Engine · Word · Youtube Music
-
-</details>
-
-<details>
-<summary>Lumina Frost — 54 icons</summary>
-
-AI Studio · Aimlabs · Antigravity · ATLauncher · Blitz · Canva · Ccleaner · Chatgpt · Chrome · Classroom · Claude Ai · Discord · Edge · Epic Games · Excel · Geek Uninstaller · Gemini · Github · Go · Helium · Images · Iso · Kindle · Kovacks · Labymod · Linkedin · Lossless Scaling · Medal · Mem Reduct · Minecraft · Minecraft V2 · Mini Cozy Room · Msiafterburner · NotebookLM · Nvidia App · Obs · Olympus · Opendesign · Pinterest · Powerpoint · Process Lasso · Reddit · Riot Client · Roblox · Spotify · Steam · Terraria · tModLoader · Valorant · Valorant Tracker · Vscode · Wallpaper Engine · Word · Youtube Music
-
-</details>
+*   **Grid Calibration:** Squircles are rendered with a custom mathematical curve to avoid harsh corners, with a bounding box logo fraction calibrated per-resolution (`50%` for 256px down to `68%` for 16px to ensure readability on small scales).
+*   **No Scaling Blurs:** Each `.ico` file contains 6 distinct, pre-rendered resolutions (256, 128, 64, 48, 32, 16 px) with 4x supersampling and Lanczos downsampling to prevent Windows from applying ugly real-time resizing filters.
+*   **Universal Compatibility:** Works with standard Windows shortcuts (`.lnk`) and Steam Protocol shortcuts (`.url`).
 
 ---
 
-## Technical specs
+## 🔍 Troubleshooting & UAC Limitations
 
-- **Format:** `.ico` with 6 embedded resolutions — 256, 128, 64, 48, 32, 16 px
-- **Rendering:** 4× supersampling → LANCZOS downsample
-- **Shape:** squircle with `border-radius ≈ 23%` of icon size
-- **Source:** each logo is extracted as a binary silhouette via CIELab or alpha-channel analysis
+*   **Public Shortcuts (Epic Games, Valorant, Riot, etc.):** If you run the script without administrator privileges, it might not be able to delete or rename shortcuts located in the Public Desktop (`C:\Users\Public\Desktop`) due to Windows UAC permissions. If this happens:
+    1.  The script will print a warning but won't crash.
+    2.  Simply move those public shortcuts to your personal Desktop folder (`%userprofile%\Desktop`) and run the script again.
+*   **Icons don't refresh immediately:** Windows caching is stubborn. If the icons don't change, click on an empty space on your Desktop and press `F5` (or right-click ➔ Refresh). In extreme cases, sign out and sign back in to Windows.
+*   **Offline usage:** The script automatically attempts to install `pypiwin32` via `pip` on first run. If you are offline, you can manually install the dependency beforehand with: `pip install pypiwin32 --user`.
 
----
+*Developed with mathematical rigor and aesthetic passion. © 2026 Acourd.*
