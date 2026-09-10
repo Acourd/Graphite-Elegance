@@ -1,0 +1,28 @@
+# Normalize all text files to LF in the repository and the working tree,
+# so line endings are deterministic across platforms. Windows launchers keep
+# CRLF for maximum compatibility with cmd.exe / PowerShell.
+* text=auto eol=lf
+
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+*.ps1  text eol=crlf
+
+# Binary assets: never normalized, never diffed as text
+*.ico      binary
+*.icns     binary
+*.png      binary
+*.jpg      binary
+*.jpeg     binary
+*.gif      binary
+*.webp     binary
+*.bmp      binary
+*.tif      binary
+*.tiff     binary
+*.pdf      binary
+*.zip      binary
+*.7z       binary
+*.rar      binary
+*.exe      binary
+*.dll      binary
+*.mcworld  binary
+*.mcaddon  binary
