@@ -74,7 +74,7 @@ def process_overwatch():
 
 def main():
     if os.path.exists(RAW_DIR):
-        for f in os.listdir(RAW_DIR):
+        for f in sorted(os.listdir(RAW_DIR)):
             if f.endswith('.png'):
                 base_name = f.replace('.png', '')
                 process_png(os.path.join(RAW_DIR, f), base_name)

@@ -45,29 +45,52 @@ SKIP_DIRS = {".git", "Generator", "Tools", "tests", "node_modules", ".github"}
 
 
 # ---------------------------------------------------------------------------
-def read_ico_sizes(path):
-    """Return (sizes, error). sizes is a list of ints (256 for 0)."""
+def inspect_ico(path):
+    """Return (sizes, errors, warnings) with structural + payload checks."""
+    sizes, errors, warnings = [], [], []
     try:
         with open(path, "rb") as fh:
-            header = fh.read(6)
-            if len(header) < 6:
-                return [], "archivo demasiado corto"
-            reserved, itype, count = struct.unpack("<HHH", header)
-            if reserved != 0 or itype != 1:
-                return [], "no es un .ico (cabecera inválida)"
-            if count == 0:
-                return [], "sin entradas de imagen"
-            entries = fh.read(count * 16)
-            if len(entries) < count * 16:
-                return [], "tabla de entradas truncada"
+            data = fh.read()
     except OSError as exc:
-        return [], f"no se pudo leer: {exc}"
+        return sizes, [f"no se pudo leer: {exc}"], warnings
 
-    sizes = []
+    if len(data) < 6:
+        return sizes, ["archivo demasiado corto"], warnings
+    reserved, itype, count = struct.unpack_from("<HHH", data, 0)
+    if reserved != 0 or itype != 1:
+        return sizes, ["no es un .ico (cabecera inválida)"], warnings
+    if count == 0:
+        return sizes, ["sin entradas de imagen"], warnings
+    if len(data) < 6 + count * 16:
+        return sizes, ["tabla de entradas truncada"], warnings
+
     for i in range(count):
-        w = entries[i * 16]
-        sizes.append(256 if w == 0 else w)
-    return sizes, None
+        off = 6 + i * 16
+        w, h, _col, _res, _planes, _bpp, size, dataoff = struct.unpack_from("<BBBBHHII", data, off)
+        w = 256 if w == 0 else w
+        h = 256 if h == 0 else h
+        sizes.append(w)
+        if w != h:
+            errors.append(f"entrada {i}: no cuadrada ({w}x{h})")
+        if not (1 <= w <= 256):
+            errors.append(f"entrada {i}: tamaño fuera de rango ({w})")
+        if size <= 0 or dataoff + size > len(data):
+            errors.append(f"entrada {i}: payload fuera de límites")
+            continue
+        head = data[dataoff:dataoff + 8]
+        is_png = head.startswith(b"\x89PNG\r\n\x1a\n")
+        is_bmp = head[:4] in (b"\x28\x00\x00\x00", b"\x0c\x00\x00\x00")
+        if not (is_png or is_bmp):
+            errors.append(f"entrada {i}: payload no decodificable (ni PNG ni BMP)")
+    if len(set(sizes)) != len(sizes):
+        warnings.append(f"entradas de tamaño duplicadas {sorted(sizes)}")
+    return sizes, errors, warnings
+
+
+def read_ico_sizes(path):
+    """Backwards-compatible: (sizes, first_error)."""
+    sizes, errors, _warnings = inspect_ico(path)
+    return sizes, (errors[0] if errors else None)
 
 
 # ---------------------------------------------------------------------------
@@ -110,19 +133,22 @@ def validate_config(config_path, required=REQUIRED_ICO_SIZES, baseline=None):
             result["checked"] += 1
             fpath = os.path.join(dirpath, fname)
             rel = os.path.relpath(fpath, REPO)
-            sizes, err = read_ico_sizes(fpath)
-            if err:
-                result["errors"].append(f"{rel}: {err}")
-                continue
-            missing = [s for s in required if s not in sizes]
-            if len(set(sizes)) != len(sizes):
-                result["warnings"].append(f"{rel}: entradas de tamaño duplicadas {sorted(sizes)}")
-            if missing:
-                covered = f"{rel}: faltan {missing}"
-                if baseline and any(fnmatch.fnmatch(rel, p) for p in baseline):
-                    result["warnings"].append(f"(baseline) {covered}")
+            sizes, errs, warns = inspect_ico(fpath)
+            covered_by_baseline = baseline and any(fnmatch.fnmatch(rel, p) for p in baseline)
+            for err in errs:
+                if covered_by_baseline:
+                    result["warnings"].append(f"(baseline) {rel}: {err}")
                 else:
-                    result["errors"].append(covered)
+                    result["errors"].append(f"{rel}: {err}")
+            for warn in warns:
+                result["warnings"].append(f"{rel}: {warn}")
+            missing = [s for s in required if s not in sizes]
+            if missing:
+                text = f"{rel}: faltan {missing}"
+                if covered_by_baseline:
+                    result["warnings"].append(f"(baseline) {text}")
+                else:
+                    result["errors"].append(text)
                     for s in missing:
                         missing_by_size[s] = missing_by_size.get(s, 0) + 1
 

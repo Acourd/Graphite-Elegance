@@ -1,6 +1,8 @@
 import os
 import io
 import re
+import argparse
+import hashlib
 import requests
 from PIL import Image, ImageDraw
 import cv2
@@ -23,6 +25,7 @@ OUT_DIR = os.path.join(BASE, "Graphite_Elegance_Release", "Icons", "ICO")
 PNG_DIR = os.path.join(BASE, "Graphite_Elegance_Release", "Icons", "PNG")
 REVIEW_DIR = os.path.join(BASE, "Graphite_Elegance_Release", "Icons", "_Review")
 RAW_DIR = os.path.join(_GENERATOR, "assets", "Raw_Silhouettes")
+LOCK_PATH = os.path.join(_GENERATOR, "assets", "Raw_Silhouettes.lock.json")
 DESKTOP_DIRS = [
     os.path.join(os.path.expanduser("~"), "Desktop"),
     os.path.join(os.environ.get("PUBLIC", r"C:\Users\Public"), "Desktop"),
@@ -451,11 +454,42 @@ def process_app(app_name):
     print(f"[FAIL] Could not generate icon for {clean_name}")
 
 
+def _sha256(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 16), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def verify_sources(raw_dir=RAW_DIR, lock_path=LOCK_PATH):
+    """Verify local source assets against their pinned SHA-256 lock."""
+    if not os.path.isfile(lock_path):
+        print(f"[WARN] Sin lock de fuentes ({lock_path}); genéralo con hash_assets.py")
+        return True
+    import json
+    with open(lock_path, "r", encoding="utf-8") as fh:
+        lock = json.load(fh)
+    problems = []
+    for name, digest in sorted(lock.items()):
+        path = os.path.join(raw_dir, name)
+        if not os.path.isfile(path):
+            problems.append(f"falta {name}")
+        elif _sha256(path) != digest:
+            problems.append(f"hash distinto {name}")
+    for problem in problems:
+        print(f"  [FUENTE] {problem}")
+    if problems:
+        return False
+    print(f"[INFO] {len(lock)} fuentes locales verificadas")
+    return True
+
+
 def process_raw_images():
     if os.path.exists(RAW_DIR):
         print("Processing RAW directory for local icons...")
         valid_exts = ('.png', '.jpg', '.jpeg', '.webp', '.ico')
-        for f in os.listdir(RAW_DIR):
+        for f in sorted(os.listdir(RAW_DIR)):  # stable order
             if f.lower().endswith(valid_exts):
                 base_name = os.path.splitext(f)[0].strip()
                 path = os.path.join(RAW_DIR, f)
@@ -464,39 +498,51 @@ def process_raw_images():
                         print(f"[OK] Local Raw -> {base_name}")
 
 
-def main():
-    apps_to_process = set([
-        'canva', 'excel', 'reddit', 'github', 'gmail', 'go', 'linkedin',
-        'outlook', 'perplexity', 'pinterest', 'powerpoint', 'roblox',
-        'spotify', 'to-do list', 'vscode', 'word', 'blasphemous',
-        'geek-uninstaller', 'hytale', 'lossless-scaling', 'notebooklm',
-        'optimizer', 'discord', 'ccleaner', 'steam', 'valorant',
-        'riot-client', 'obs', 'terraria', 'minecraft', 'chatgpt',
-        'nvidia app', 'medal',
-    ])
+DEFAULT_APPS = (
+    'canva', 'excel', 'reddit', 'github', 'gmail', 'go', 'linkedin',
+    'outlook', 'perplexity', 'pinterest', 'powerpoint', 'roblox',
+    'spotify', 'to-do list', 'vscode', 'word', 'blasphemous',
+    'geek-uninstaller', 'hytale', 'lossless-scaling', 'notebooklm',
+    'optimizer', 'discord', 'ccleaner', 'steam', 'valorant',
+    'riot-client', 'obs', 'terraria', 'minecraft', 'chatgpt',
+    'nvidia app', 'medal',
+)
 
-    for d in DESKTOP_DIRS:
-        if os.path.exists(d):
-            for f in os.listdir(d):
-                if f.endswith('.lnk'):
-                    name = f.replace('.lnk', '').strip()
-                    name = re.sub(r' release-stable-win', '', name)
-                    name = re.sub(r' \d+$', '', name)
-                    apps_to_process.add(name)
 
-    extracted_dir = os.path.join(BASE, "BlackVersion")
-    if os.path.exists(extracted_dir):
-        for f in os.listdir(extracted_dir):
-            if f.endswith('.ico'):
-                apps_to_process.add(f.replace('.ico', ''))
+def main(argv=None):
+    parser = argparse.ArgumentParser(
+        description="Generador Graphite Elegance. Por defecto es REPRODUCIBLE: "
+                    "solo usa las fuentes locales y en orden estable.")
+    parser.add_argument("--online", action="store_true",
+                        help="Permitir descargas mutables (SimpleIcons/Clearbit).")
+    parser.add_argument("--from-desktop", action="store_true",
+                        help="Incluir los accesos del escritorio del operador (no reproducible).")
+    parser.add_argument("--verify-sources", action="store_true",
+                        help="Verificar hashes de Raw_Silhouettes.lock.json antes de generar.")
+    args = parser.parse_args(argv)
 
-    # Process all online apps
-    for app in apps_to_process:
-        process_app(app)
+    if args.verify_sources and not verify_sources():
+        print("[FAIL] Fuentes locales alteradas; abortando.")
+        return 1
 
-    # Process local raw images
+    if args.online or args.from_desktop:
+        apps = set()
+        if args.online:
+            apps.update(DEFAULT_APPS)
+        if args.from_desktop:
+            for d in DESKTOP_DIRS:
+                if os.path.exists(d):
+                    for f in sorted(os.listdir(d)):
+                        if f.endswith('.lnk'):
+                            name = re.sub(r' release-stable-win', '', f.replace('.lnk', '').strip())
+                            apps.add(re.sub(r' \d+$', '', name))
+        for app in sorted(apps):
+            process_app(app)
+
+    # Local, versioned assets -> deterministic output.
     process_raw_images()
+    return 0
 
 
 if __name__ == '__main__':
-    main()
+    raise SystemExit(main())

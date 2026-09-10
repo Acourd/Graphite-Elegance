@@ -29,15 +29,35 @@ Generator/
    rendered at `size × 4` (supersampling) and downscaled with LANCZOS.
 4. **Export** — multi-resolution `.ico` (256/128/64/48/32/16) + 256 px master PNG.
 
+## Reproducibility
+
+Generation is **deterministic by default**:
+
+- Only the versioned local assets in `assets/Raw_Silhouettes/` are read, in
+  sorted order; the operator's Desktop is **not** inspected.
+- Network lookups (SimpleIcons / Clearbit / favicon) are **opt-in** and are
+  inherently mutable, so they are never part of the default path.
+- `assets/Raw_Silhouettes.lock.json` pins the SHA-256 of every local source.
+  Verify with `hash_assets.py --check` (also run in CI).
+
+```bat
+python scripts\hash_assets.py            :: (re)build the lock
+python scripts\hash_assets.py --check    :: fail on source drift
+python scripts\generate_premium_icons.py --verify-sources
+:: opt-in, non-reproducible:
+:: python scripts\generate_premium_icons.py --online --from-desktop
+```
+
 ## Scripts
 
 | Script | Status | What it does |
 |---|---|---|
-| `generate_premium_icons.py` | ✅ main | Full Graphite pipeline. Local + online sources, `_Review` quarantine, pretty names. |
+| `generate_premium_icons.py` | ✅ main | Full Graphite pipeline. Reproducible from local sources; `_Review` quarantine, pretty names. `--online`/`--from-desktop` opt into non-reproducible sources. |
 | `graphite_compose.py` | ✅ | Composes a fixed list from `Raw_Silhouettes` with the Graphite style. |
 | `lumina_compose.py` | ✅ | Same as above but Lumina Frost style (light, dark logo). |
 | `generate_graphite.py` | ✅ | First version of the Graphite generator. |
 | `images_to_ico.py` | ✅ conversion | PNG/JPG/ICO master → multi-resolution `.ico` (16/32/48/64/128/256). Does **not** composite; also **repairs** 256-only icons. |
+| `hash_assets.py` | ✅ | Builds/verifies `assets/Raw_Silhouettes.lock.json` (SHA-256). |
 | `graphite_builder.py` | ⚠️ optional | Alternative render via SVG + Playwright/Chromium. |
 | `generate_icons.py`, `process_raw.py`, `make_preview.py` | ⚠️ legacy | Early prototypes; they write under `Generator/`. |
 | `premium_upgrade.py` | ⚠️ legacy | One-off migration from a "Premium" set (`_premium_in/`). |
@@ -51,8 +71,9 @@ root) and are the recommended entry points.
 ```bat
 pip install -r requirements.txt
 
-:: Regenerate Graphite Elegance from Raw_Silhouettes + online
-python scripts\generate_premium_icons.py
+:: Verify pinned sources, then generate locally (deterministic)
+python scripts\hash_assets.py --check
+python scripts\generate_premium_icons.py --verify-sources
 
 :: Lumina Frost style (Videojuegos category)
 python scripts\lumina_compose.py

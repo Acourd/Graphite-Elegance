@@ -54,7 +54,7 @@ A collection of premium, minimalist, and geometric icon suites for Windows deskt
     ├── Icons/ICO/                ← multi-resolution .ico (256, 128, 64, 48, 32, 16 px)
     ├── theme.json                ← theme config for the shared engine
     ├── Tools/apply_desktop_icons.py  ← thin shim → Tools/icon_engine.py
-    └── Apply_Theme.ps1           ← launcher (Right-click ➔ Run with PowerShell)
+    └── Apply_Theme.ps1           ← launcher (Graphite only; others use Tools\Install.bat)
 ```
 
 The engine lives once at `Tools/icon_engine.py`; each theme only carries a
@@ -66,8 +66,10 @@ The engine lives once at `Tools/icon_engine.py`; each theme only carries a
 
 1. `pip install -r requirements.txt` (the engine never auto-installs anything).
 2. Open the theme folder (e.g. `Graphite_Elegance_Release`).
-3. Right-click **`Apply_Theme.ps1`** ➔ **"Run with PowerShell"**, or run
-   `Tools\Install.bat`.
+3. Launch it:
+   - **Graphite Elegance** ships `Apply_Theme.ps1` (Right-click ➔ *Run with PowerShell*).
+   - **All themes** have `Tools\Install.bat` (double-click).
+   - Or call the engine directly (commands below).
 
 By default this only **applies icons**. Destructive / cosmetic steps are
 **opt-in**:
@@ -76,20 +78,28 @@ By default this only **applies icons**. Destructive / cosmetic steps are
 :: apply icons only (safe default)
 python Tools\icon_engine.py --config Graphite_Elegance_Release\theme.json
 
-:: preview without writing anything
+:: preview without writing anything (no backup, no refresh, no prompt)
 python Tools\icon_engine.py --config Graphite_Elegance_Release\theme.json --dry-run
 
 :: hide shortcut names (accessibility: opt-in) and clean launcher duplicates
 python Tools\icon_engine.py --config Graphite_Elegance_Release\theme.json --rename --cleanup
 
-:: reorder already-applied shortcuts
+:: reorder already-applied shortcuts (theme items only)
 python Tools\icon_engine.py --config Graphite_Elegance_Release\theme.json --organize
 
 :: undo a previous run
 python Tools\icon_engine.py --restore "%LOCALAPPDATA%\Icons_Engine\backups\<key>\<timestamp>"
 ```
 
-Every change is backed up under `%LOCALAPPDATA%\Icons_Engine\backups\`.
+### Safety
+- A **backup is written before any change** (icon edits, deletions and renames
+  included) under `%LOCALAPPDATA%\Icons_Engine\backups\<key>\<timestamp>\`.
+- `--restore` validates the manifest schema and **only touches paths inside the
+  user/public Desktop**; it never deletes arbitrary files.
+- `--rename` and `--organize` operate **only on shortcuts that match the active
+  theme**.
+- `theme.json` is validated strictly: unknown keys are rejected, `persist_key`
+  is sanitized and `icons_dir` may not escape the theme folder.
 
 ### Note on invisible names
 `--rename` uses non-breaking spaces, which makes shortcut names invisible to
@@ -100,17 +110,27 @@ a default.
 
 ## 🏭 Regenerating & validating icons
 
+The factory is **reproducible by default**: it only reads the versioned local
+assets (`Generator/assets/Raw_Silhouettes`) in a stable order. Network lookups
+are opt-in.
+
 ```bat
 :: factory setup
 pip install -r Generator\requirements.txt
 
-:: silhouette → composed PNG (see Generator/README.md)
-python Generator\scripts\generate_premium_icons.py
+:: pin / verify the local source assets
+python Generator\scripts\hash_assets.py
+python Generator\scripts\hash_assets.py --check
+
+:: local, deterministic generation (verify first with --verify-sources)
+python Generator\scripts\generate_premium_icons.py --verify-sources
+:: opt-in, non-reproducible:
+:: python Generator\scripts\generate_premium_icons.py --online --from-desktop
 
 :: PNG/ICO master → multi-resolution .ico (16/32/48/64/128/256)
 python Generator\scripts\images_to_ico.py --input <theme>\Icons\ICO --overwrite --recursive
 
-:: gate: fails on incomplete resolutions or duplicate names
+:: gate: fails on incomplete resolutions, bad payloads or duplicate names
 python Tools\icon_validate.py --all
 ```
 

@@ -2,7 +2,5 @@
   "name": "Midnight Ooo",
   "persist_key": "Ooo_Midnight",
   "icons_dir": "Icons/Midnight_Ooo",
-  "rename_invisible": true,
-  "cleanup_duplicates": true,
   "order": []
 }

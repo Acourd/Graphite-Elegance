@@ -2,7 +2,5 @@
   "name": "Horizon Glow",
   "persist_key": "Ooo_Horizon_Glow",
   "icons_dir": "Icons/Horizon_Glow",
-  "rename_invisible": true,
-  "cleanup_duplicates": true,
   "order": []
 }

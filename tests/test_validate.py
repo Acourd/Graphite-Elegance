@@ -11,7 +11,7 @@ def make_ico(sizes):
     data = b""
     for s in sizes:
         w = 0 if s == 256 else s
-        payload = b"\x00\x00\x00\x00"
+        payload = b"\x28\x00\x00\x00" + b"\x00" * 8  # valid BITMAPINFOHEADER start
         entries += struct.pack("<BBBBHHII", w, w, 0, 0, 1, 32, len(payload), offset)
         offset += len(payload)
         data += payload

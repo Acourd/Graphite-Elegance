@@ -30,6 +30,7 @@ def test_valid_config_resolves_paths(tmp_path):
     {"icons_dir": "../outside"},
     {"order": "not-a-list"},
     {"order": [1, 2]},
+    {"unknown_key": True},
 ])
 def test_invalid_config_rejected(bad, tmp_path):
     with pytest.raises(ConfigError):
