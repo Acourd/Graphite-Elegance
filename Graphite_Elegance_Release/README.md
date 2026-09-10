@@ -1,8 +1,9 @@
 # Graphite Elegance
 
-A premium, minimalist custom icon pack for Windows desktops. Designed to harmonize with dark modes and clean desktop aesthetics.
+A premium, minimalist custom icon pack for Windows desktops. Designed to
+harmonize with dark modes and clean desktop aesthetics.
 
-**56 icons** — apps, games, tools, and AI.
+**73 icons** — apps, games, tools, and AI.
 
 ![Preview](preview.png)
 
@@ -16,25 +17,33 @@ A premium, minimalist custom icon pack for Windows desktops. Designed to harmoni
 
 ---
 
-## How to Use — Auto (Python script)
+## How to Use — Auto (shared engine)
 
-> **Windows only.** Requires Python 3 installed on your system.
+> **Windows only.** Requires Python 3. Install once: `pip install -r ..\requirements.txt`.
 
-**Option A — one-click installer (recommended)**
+**Option A — one-click launcher**
 
-Double-click `Tools\Install.bat`.  
-It installs the required dependency and applies the icons automatically.
+Double-click `Apply_Theme.ps1` (or `Tools\Install.bat`). This applies the icons
+only — it does **not** rename shortcuts.
 
-**Option B — manual pip**
+**Option B — manual (recommended flags)**
 
 ```cmd
-pip install pypiwin32
+:: apply icons only (safe default)
 python Tools\apply_desktop_icons.py
+
+:: hide shortcut names (opt-in; accessibility caveat) and clean launcher duplicates
+python Tools\apply_desktop_icons.py --rename --cleanup
+
+:: preview without changing anything
+python Tools\apply_desktop_icons.py --dry-run
 ```
 
-The script scans your Desktop (user + public) and applies the matching icon to every `.lnk` and `.url` shortcut it finds. At the end it prints a list of any shortcuts that didn't have a matching icon in the pack. A single Explorer refresh is sent when done.
+The engine scans your Desktop (user + public) and applies the matching icon to
+every `.lnk` / `.url` it finds. See `../Tools/README.md` for all flags, backups
+and `--restore`.
 
-If icons don't update immediately after the script finishes, press **F5** on the desktop.
+If icons don't update immediately, press **F5** on the Desktop.
 
 ---
 
@@ -46,5 +55,4 @@ If icons don't update immediately after the script finishes, press **F5** on the
 4. Click **Apply** → **OK**.
 
 ---
-
 *Created by Ayco.*

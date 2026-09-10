@@ -1,0 +1,8 @@
+{
+  "name": "White Space Pixel",
+  "persist_key": "White_Space_Pixel",
+  "icons_dir": "Icons/ICO",
+  "rename_invisible": true,
+  "cleanup_duplicates": true,
+  "order": []
+}

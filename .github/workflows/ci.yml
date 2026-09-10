@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: Lint & tests (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install --upgrade pip
+      - run: pip install -r requirements-dev.txt
+      - run: python -m compileall -q Tools Generator/scripts
+      - run: ruff check Tools tests
+      - run: pytest
+
+  validate-icons:
+    name: Validate .ico resolutions & unique names
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate released icons
+        # Fails while any released .ico is missing 16/32/48/64/128/256
+        # or a theme variant has duplicate icon names.
+        run: python Tools/icon_validate.py --all
+
+  windows-smoke:
+    name: Windows smoke (engine dry-run)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --upgrade pip
+      - run: pip install -r requirements-dev.txt
+      - run: pytest
+      - name: Dry-run the engine (no writes, no refresh)
+        run: python Tools/icon_engine.py --config Graphite_Elegance_Release/theme.json --dry-run

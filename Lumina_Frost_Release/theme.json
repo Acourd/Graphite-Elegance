@@ -1,0 +1,8 @@
+{
+  "name": "Lumina Frost",
+  "persist_key": "Lumina_Frost_Release",
+  "icons_dir": "Icons/ICO",
+  "rename_invisible": true,
+  "cleanup_duplicates": true,
+  "order": []
+}

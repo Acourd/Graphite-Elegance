@@ -1,10 +1,16 @@
 # Lumina Frost
 
-A clean, minimalist custom icon pack for Windows desktops. Companion theme to Graphite Elegance — inverted color scheme designed for light-mode and minimal desktop setups.
+A clean, minimalist custom icon pack for Windows desktops. Companion theme to
+Graphite Elegance — inverted color scheme designed for light-mode and minimal
+desktop setups.
 
-**54 icons** — apps, games, tools, and AI.
+**71 icons** — apps, games, tools, and AI. Organized by category
+(`Games/`, `Productivity/`, `Social/`, `Utilities/`).
 
 ![Preview](preview.png)
+
+All icons ship the full 16/32/48/64/128/256 frame set and unique names
+(`python ..\Tools\icon_validate.py --all`).
 
 ---
 
@@ -16,25 +22,30 @@ A clean, minimalist custom icon pack for Windows desktops. Companion theme to Gr
 
 ---
 
-## How to Use — Auto (Python script)
+## How to Use — Auto (shared engine)
 
-> **Windows only.** Requires Python 3 installed on your system.
+> **Windows only.** Requires Python 3. Install once: `pip install -r ..\requirements.txt`.
 
-**Option A — one-click installer (recommended)**
+**Option A — one-click launcher**
 
-Double-click `Tools\Install.bat`.
-It installs the required dependency and applies the icons automatically.
+Double-click `Tools\Install.bat`. This applies the icons only — it does **not**
+rename shortcuts.
 
-**Option B — manual pip**
+**Option B — manual (recommended flags)**
 
 ```cmd
-pip install pypiwin32
+:: apply icons only (safe default)
 python Tools\apply_desktop_icons.py
+
+:: hide shortcut names (opt-in) and clean launcher duplicates
+python Tools\apply_desktop_icons.py --rename --cleanup
+
+:: preview without changing anything
+python Tools\apply_desktop_icons.py --dry-run
 ```
 
-The script scans your Desktop (user + public) and applies the matching icon to every `.lnk` and `.url` shortcut it finds. At the end it prints a list of any shortcuts that didn't have a matching icon in the pack.
-
-If icons don't update immediately after the script finishes, press **F5** on the desktop.
+If icons don't update immediately, press **F5** on the Desktop.
+See `../Tools/README.md` for all flags, backups and `--restore`.
 
 ---
 
@@ -46,5 +57,4 @@ If icons don't update immediately after the script finishes, press **F5** on the
 4. Click **Apply** → **OK**.
 
 ---
-
 *Created by Ayco.*
