@@ -19,9 +19,9 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: python -m pip install --upgrade pip
       - run: pip install -r requirements-dev.txt
-      - run: python -m compileall -q Tools Generator/scripts
+      - run: python -m compileall -q Tools Generator/scripts Generator/pipeline
       - run: python Generator/scripts/hash_assets.py --check
-      - run: ruff check Tools tests
+      - run: ruff check Tools tests Generator/pipeline
       - run: pytest
 
   validate-icons:
@@ -36,6 +36,21 @@ jobs:
         # Fails while any released .ico is missing 16/32/48/64/128/256
         # or a theme variant has duplicate icon names.
         run: python Tools/icon_validate.py --all
+
+  generator:
+    name: Reproducible generator
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --upgrade pip
+      - run: pip install -r Generator/requirements.txt
+      - run: python Generator/scripts/hash_assets.py --check
+      - run: python Generator/pipeline/build.py --check
+      - run: python Generator/pipeline/build.py --apply --only Graphite_Elegance_Release --output-dir build_out
+      - run: python Generator/pipeline/check_output.py build_out
 
   windows-smoke:
     name: Windows smoke (engine dry-run)
