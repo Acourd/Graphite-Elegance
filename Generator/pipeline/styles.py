@@ -10,10 +10,9 @@ without OpenCV. Palette values are sampled from the released 256px frames:
     kiralight : (198,190,176) -> (226,217,201)    near-black logo
     horizon   : (254,247,235) -> (252,243,226)    deep indigo logo
     midnight  : (27,18,58) -> (12,8,30)           amber logo
-    pixel     : opaque square with a black logo on white, nearest-neighbour.
-                Palette matches the reference; shapes are approximate (the
-                released icons use dedicated pixel-art sources) so parity is
-                still pending.
+    pixel     : opaque transparent-corner white square, black border, black
+                pixel-art logo. Sources are derived from the released icons;
+                parity ~17/255 (reference kept until final tuning).
 """
 
 STYLES = {
@@ -43,7 +42,8 @@ STYLES = {
     },
     "pixel": {
         "grad_top": (255, 255, 255), "grad_bottom": (255, 255, 255),
-        "logo": (0, 0, 0), "border": False, "shadow": False,
-        "square": True, "pixelated": True,
+        "logo": (0, 0, 0), "border": True, "border_color": (0, 0, 0, 255),
+        "border_width": 4, "radius": 40, "logo_frac": 0.53,
+        "pixelated": True, "pixel_grid": 32,
     },
 }

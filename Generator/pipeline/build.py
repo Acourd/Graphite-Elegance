@@ -27,7 +27,7 @@ PIPELINE = os.path.dirname(os.path.abspath(__file__))
 GENERATOR = os.path.dirname(PIPELINE)
 REPO = os.path.dirname(GENERATOR)
 SOURCES = os.path.join(PIPELINE, "sources.json")
-RAW = os.path.join(GENERATOR, "assets", "Raw_Silhouettes")
+DEFAULT_ASSETS = "Generator/assets/Raw_Silhouettes"
 LOCK = os.path.join(GENERATOR, "assets", "Raw_Silhouettes.lock.json")
 
 if PIPELINE not in sys.path:
@@ -35,6 +35,14 @@ if PIPELINE not in sys.path:
 from styles import STYLES  # noqa: E402
 
 KNOWN_STYLES = set(STYLES)
+
+
+def theme_assets(theme, repo=REPO):
+    return os.path.abspath(os.path.join(repo, theme.get("assets", DEFAULT_ASSETS)))
+
+
+def lock_for(assets_dir):
+    return os.path.join(os.path.dirname(assets_dir), os.path.basename(assets_dir) + ".lock.json")
 
 
 def sha256(path):
@@ -64,10 +72,7 @@ def _within(child, parent):
 def verify(manifest, repo=REPO):
     """Return a list of problems with the manifest/sources (empty = ok)."""
     errors = []
-    lock = {}
-    if os.path.isfile(LOCK):
-        with open(LOCK, "r", encoding="utf-8") as fh:
-            lock = json.load(fh)
+    lock_cache = {}
 
     for theme in manifest["themes"]:
         name = theme.get("name", "?")
@@ -77,6 +82,14 @@ def verify(manifest, repo=REPO):
         icons_dir = os.path.join(repo, theme.get("icons_dir", ""))
         if not _within(icons_dir, repo):
             errors.append(f"{name}: icons_dir sale del repo")
+        assets = theme_assets(theme, repo)
+        if not _within(assets, repo):
+            errors.append(f"{name}: assets sale del repo")
+        lock_path = lock_for(assets)
+        if lock_path not in lock_cache:
+            lock_cache[lock_path] = (json.load(open(lock_path, encoding="utf-8"))
+                                     if os.path.isfile(lock_path) else {})
+        lock = lock_cache[lock_path]
         outputs = set()
         for target in theme.get("targets", []):
             source = target.get("source")
@@ -84,7 +97,7 @@ def verify(manifest, repo=REPO):
             if not source or not output:
                 errors.append(f"{name}: target sin source/output")
                 continue
-            src_path = os.path.join(RAW, source)
+            src_path = os.path.join(assets, source)
             if not os.path.isfile(src_path):
                 errors.append(f"{name}: falta la fuente {source}")
             elif source in lock and sha256(src_path) != lock[source]:
@@ -107,10 +120,11 @@ def apply(manifest, repo=REPO, only=None, output_dir=None):
         if only and theme["name"] != only:
             continue
         style = theme["style"]
+        assets = theme_assets(theme, repo)
         ico_dir = os.path.join(base, theme["icons_dir"])
         png_dir = os.path.join(base, theme["png_dir"]) if theme.get("png_dir") else None
         for target in sorted(theme["targets"], key=lambda t: t["output"].lower()):
-            src = os.path.join(RAW, target["source"])
+            src = os.path.join(assets, target["source"])
             renders = compose_from_file(src, style, sizes=ICON_SIZES)
             os.makedirs(ico_dir, exist_ok=True)
             save_ico(renders, os.path.join(ico_dir, f"{target['output']}.ico"))

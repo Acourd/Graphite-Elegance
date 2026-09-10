@@ -114,13 +114,17 @@ def _resize_silhouette_aa(mask, target_long, color):
     return Image.fromarray(_logo_rgba((a * 255).astype(np.uint8), color), "RGBA")
 
 
-def _resize_silhouette_pixel(mask, target_long, color):
+def _resize_silhouette_pixel(mask, target_long, color, grid=32):
+    """Blocky logo: quantise to a coarse grid then upscale with NEAREST."""
     x, y, bw, bh = cv2.boundingRect(mask)
     mask = mask[y:y + bh, x:x + bw]
     scale = target_long / max(bw, bh)
     new_wh = (max(1, round(bw * scale)), max(1, round(bh * scale)))
-    a = cv2.resize(mask, new_wh, interpolation=cv2.INTER_NEAREST)
-    a = np.where(a >= 128, 255, 0).astype(np.uint8)
+    cell = max(1, round(target_long / grid))
+    small = (max(1, round(new_wh[0] / cell)), max(1, round(new_wh[1] / cell)))
+    q = cv2.resize(mask, small, interpolation=cv2.INTER_AREA)
+    q = np.where(q >= 128, 255, 0).astype(np.uint8)
+    a = cv2.resize(q, new_wh, interpolation=cv2.INTER_NEAREST)
     return Image.fromarray(_logo_rgba(a, color), "RGBA")
 
 
@@ -138,41 +142,37 @@ def compose_icon(mask, size, style):
     """Compose one size x size icon in the given style."""
     st = STYLES[style]
     spec = ICO_SPECS[size]
-
-    if st.get("pixelated"):
-        r, g, b = st["grad_top"]
-        canvas = Image.fromarray(
-            np.dstack([np.full((size, size), r, np.uint8),
-                       np.full((size, size), g, np.uint8),
-                       np.full((size, size), b, np.uint8),
-                       np.full((size, size), 255, np.uint8)]), "RGBA")
-        logo = _resize_silhouette_pixel(mask, max(1, int(size * spec["logo_frac"])), st["logo"])
-        off = ((size - logo.width) // 2, (size - logo.height) // 2)
-        canvas.alpha_composite(logo, off)
-        return canvas
-
-    S = size * SS
-    border = st["border"] and spec["border"]
-    shadow = st["shadow"] and spec["shadow"]
+    S = size if st.get("pixelated") else size * SS
+    border = st.get("border", False) and spec["border"]
+    shadow = st.get("shadow", False) and spec["shadow"]
+    square = st.get("square", False)
 
     rgb = _gradient(S, st["grad_top"], st["grad_bottom"])
     canvas = Image.fromarray(np.dstack([rgb, np.full((S, S), 255, np.uint8)]), "RGBA")
-    if not st.get("square"):
-        radius = (60 / 256) * S
+
+    radius = 0 if square else (st.get("radius", 60) / 256) * S
+    if not square:
         sq = Image.new("L", (S, S), 0)
         ImageDraw.Draw(sq).rounded_rectangle((0, 0, S - 1, S - 1), radius, fill=255)
         canvas.putalpha(sq)
-    else:
-        radius = 0
 
     if border:
+        color = st.get("border_color", (255, 255, 255, 30))
+        width = max(1, int(round(st.get("border_width", 1) * S / 256)))
+        inset = width / 2
         b = Image.new("RGBA", (S, S), (0, 0, 0, 0))
         ImageDraw.Draw(b).rounded_rectangle(
-            (SS // 2, SS // 2, S - 1 - SS // 2, S - 1 - SS // 2),
-            radius, outline=(255, 255, 255, 30), width=SS)
+            (inset, inset, S - 1 - inset, S - 1 - inset),
+            max(0, radius - inset), outline=color, width=width)
         canvas.alpha_composite(b)
 
-    logo = _resize_silhouette_aa(mask, max(1, int(S * spec["logo_frac"])), st["logo"])
+    if st.get("pixelated"):
+        logo = _resize_silhouette_pixel(
+            mask, max(1, int(S * st.get("logo_frac", spec["logo_frac"]))), st["logo"],
+            grid=st.get("pixel_grid", 32))
+    else:
+        logo = _resize_silhouette_aa(
+            mask, max(1, int(S * st.get("logo_frac", spec["logo_frac"]))), st["logo"])
     off = ((S - logo.width) // 2, (S - logo.height) // 2)
 
     if shadow:
@@ -186,8 +186,7 @@ def compose_icon(mask, size, style):
         key_shifted = np.zeros_like(key)
         key_shifted[dy:, :] = key[:-dy, :]
         sh = np.clip(ambient + key_shifted, 0, 1)
-        if not st.get("square"):
-            sh *= np.asarray(canvas.getchannel("A"), np.float32) / 255
+        sh *= np.asarray(canvas.getchannel("A"), np.float32) / 255
         sh_rgba = np.zeros((S, S, 4), np.uint8)
         sh_rgba[:, :, 3] = (sh * 255).astype(np.uint8)
         canvas.alpha_composite(Image.fromarray(sh_rgba, "RGBA"))

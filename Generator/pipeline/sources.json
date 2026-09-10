@@ -782,31 +782,39 @@
       "icons_dir": "White_Space_Pixel_Release/Icons/ICO",
       "targets": [
         {
-          "source": "Ai Studio.png",
+          "source": "AI Studio.png",
           "output": "AI Studio"
-        },
-        {
-          "source": "Aimlabs.ico",
-          "output": "Aimlabs"
-        },
-        {
-          "source": "Antigravity.jpg",
-          "output": "Antigravity"
         },
         {
           "source": "ATLauncher.png",
           "output": "ATLauncher"
         },
         {
-          "source": "Blitz.jpg",
+          "source": "Aimlabs.png",
+          "output": "Aimlabs"
+        },
+        {
+          "source": "Antigravity.png",
+          "output": "Antigravity"
+        },
+        {
+          "source": "Blitz.png",
           "output": "Blitz"
         },
         {
-          "source": "Chatgpt.ico",
+          "source": "Canva.png",
+          "output": "Canva"
+        },
+        {
+          "source": "Ccleaner.png",
+          "output": "Ccleaner"
+        },
+        {
+          "source": "Chatgpt.png",
           "output": "Chatgpt"
         },
         {
-          "source": "Chrome.ico",
+          "source": "Chrome.png",
           "output": "Chrome"
         },
         {
@@ -818,12 +826,24 @@
           "output": "Claude Ai"
         },
         {
+          "source": "Counter-Strike 2.png",
+          "output": "Counter-Strike 2"
+        },
+        {
+          "source": "Discord.png",
+          "output": "Discord"
+        },
+        {
           "source": "Edge.png",
           "output": "Edge"
         },
         {
           "source": "Epic Games.png",
           "output": "Epic Games"
+        },
+        {
+          "source": "Excel.png",
+          "output": "Excel"
         },
         {
           "source": "Geek Uninstaller.png",
@@ -834,8 +854,28 @@
           "output": "Gemini"
         },
         {
+          "source": "Genshin Impact.png",
+          "output": "Genshin Impact"
+        },
+        {
           "source": "Github.png",
           "output": "Github"
+        },
+        {
+          "source": "Gmail.png",
+          "output": "Gmail"
+        },
+        {
+          "source": "Go.png",
+          "output": "Go"
+        },
+        {
+          "source": "Grand Theft Auto V Enhanced.png",
+          "output": "Grand Theft Auto V Enhanced"
+        },
+        {
+          "source": "Grand Theft Auto V.png",
+          "output": "Grand Theft Auto V"
         },
         {
           "source": "Helium.png",
@@ -850,16 +890,28 @@
           "output": "Iso"
         },
         {
-          "source": "Kindle.jpg",
+          "source": "Jan.png",
+          "output": "Jan"
+        },
+        {
+          "source": "Kindle.png",
           "output": "Kindle"
         },
         {
-          "source": "Kovacks.jpg",
+          "source": "Kovacks.png",
           "output": "Kovacks"
         },
         {
           "source": "Labymod.png",
           "output": "Labymod"
+        },
+        {
+          "source": "League of Legends.png",
+          "output": "League of Legends"
+        },
+        {
+          "source": "Linkedin.png",
+          "output": "Linkedin"
         },
         {
           "source": "Lossless Scaling.png",
@@ -870,6 +922,14 @@
           "output": "Medal"
         },
         {
+          "source": "Mem Reduct.png",
+          "output": "Mem Reduct"
+        },
+        {
+          "source": "Minecraft V2.png",
+          "output": "Minecraft V2"
+        },
+        {
           "source": "Minecraft.png",
           "output": "Minecraft"
         },
@@ -878,12 +938,24 @@
           "output": "Mini Cozy Room"
         },
         {
-          "source": "MSIafterburner.jpg",
+          "source": "Msiafterburner.png",
           "output": "Msiafterburner"
+        },
+        {
+          "source": "NVIDIA Broadcast.png",
+          "output": "NVIDIA Broadcast"
         },
         {
           "source": "NotebookLM.png",
           "output": "NotebookLM"
+        },
+        {
+          "source": "Nvidia App.png",
+          "output": "Nvidia App"
+        },
+        {
+          "source": "Obs.png",
+          "output": "Obs"
         },
         {
           "source": "Olympus.png",
@@ -894,26 +966,99 @@
           "output": "Opendesign"
         },
         {
+          "source": "Perplexity.png",
+          "output": "Perplexity"
+        },
+        {
+          "source": "Pinterest.png",
+          "output": "Pinterest"
+        },
+        {
+          "source": "Powerpoint.png",
+          "output": "Powerpoint"
+        },
+        {
           "source": "Process Lasso.png",
           "output": "Process Lasso"
         },
         {
-          "source": "Terraria.ico",
-          "output": "Terraria"
+          "source": "R.E.P.O..png",
+          "output": "R.E.P.O."
         },
         {
-          "source": "tModLoader.png",
-          "output": "tModLoader"
+          "source": "Reddit.png",
+          "output": "Reddit"
+        },
+        {
+          "source": "Riot Client.png",
+          "output": "Riot Client"
+        },
+        {
+          "source": "Roblox.png",
+          "output": "Roblox"
+        },
+        {
+          "source": "Rockstar Games Launcher.png",
+          "output": "Rockstar Games Launcher"
+        },
+        {
+          "source": "Rockstar Games.png",
+          "output": "Rockstar Games"
+        },
+        {
+          "source": "Spotify.png",
+          "output": "Spotify"
+        },
+        {
+          "source": "Steam.png",
+          "output": "Steam"
+        },
+        {
+          "source": "Stick Fight The Game.png",
+          "output": "Stick Fight The Game"
+        },
+        {
+          "source": "Terraria.png",
+          "output": "Terraria"
         },
         {
           "source": "Valorant Tracker.png",
           "output": "Valorant Tracker"
         },
         {
+          "source": "Valorant.png",
+          "output": "Valorant"
+        },
+        {
+          "source": "Vscode.png",
+          "output": "Vscode"
+        },
+        {
           "source": "Wallpaper Engine.png",
           "output": "Wallpaper Engine"
+        },
+        {
+          "source": "Word.png",
+          "output": "Word"
+        },
+        {
+          "source": "Youtube Music.png",
+          "output": "Youtube Music"
+        },
+        {
+          "source": "repo.png",
+          "output": "repo"
+        },
+        {
+          "source": "stick.png",
+          "output": "stick"
+        },
+        {
+          "source": "tModLoader.png",
+          "output": "tModLoader"
         }
-      ]
+      ],
+      "assets": "Generator/assets/derived/pixel"
     }
   ]
 }
