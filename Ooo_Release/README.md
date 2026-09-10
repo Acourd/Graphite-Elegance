@@ -1,18 +1,22 @@
-# Graphite Elegance
+# Ooo — Horizon Glow & Midnight Ooo
 
-A premium, minimalist custom icon pack for Windows desktops. Designed to harmonize with dark modes and clean desktop aesthetics.
+Two premium, minimalist icon variants for Windows desktops, sharing the same
+geometry with different palettes: **Horizon Glow** (warm gradient) and
+**Midnight Ooo** (deep night tones).
 
-**56 icons** — apps, games, tools, and AI.
+Two sets — apps, games, tools, and AI.
 
-![Preview](preview.png)
+![Horizon Glow](preview_horizon.png)
+
+![Midnight Ooo](preview_midnight.png)
 
 ---
 
 ## Features
 
 - **Multi-Resolution:** Each `.ico` includes 256, 128, 64, 48, 32, and 16 px renders — no Windows Explorer scaling artifacts.
-- **Graphite Squircle:** Dark charcoal background with subtle gradient, drop shadow, and a 1 px inner border.
-- **Pure White Silhouettes:** Every logo is thresholded to a clean white mask — no color noise, no gradients on the logo itself.
+- **Squircle geometry:** Rounded-square base with flat, minimal silhouettes.
+- **Two palettes:** `Icons/Horizon_Glow/` and `Icons/Midnight_Ooo/`.
 
 ---
 
@@ -20,21 +24,32 @@ A premium, minimalist custom icon pack for Windows desktops. Designed to harmoni
 
 > **Windows only.** Requires Python 3 installed on your system.
 
-**Option A — one-click installer (recommended)**
+**Option A — one-click launcher**
 
-Double-click `Tools\Install.bat`.  
-It installs the required dependency and applies the icons automatically.
+Double-click the launcher of the variant you want:
 
-**Option B — manual pip**
+- `Tools\apply_horizon_glow.bat`
+- `Tools\apply_midnight_ooo.bat`
+
+**Option B — manual**
 
 ```cmd
-pip install pypiwin32
-python Tools\apply_desktop_icons.py
+pip install pywin32
+
+:: Horizon Glow
+python Tools\apply_horizon_glow.py
+
+:: Midnight Ooo
+python Tools\apply_midnight_ooo.py
 ```
 
-The script scans your Desktop (user + public) and applies the matching icon to every `.lnk` and `.url` shortcut it finds. At the end it prints a list of any shortcuts that didn't have a matching icon in the pack. A single Explorer refresh is sent when done.
+The engine scans your Desktop (user + public) and applies the matching icon to
+every `.lnk` and `.url` shortcut it finds. At the end it prints any shortcuts
+that had no matching icon, and sends one Explorer refresh.
 
-If icons don't update immediately after the script finishes, press **F5** on the desktop.
+If icons don't update immediately after it finishes, press **F5** on the Desktop.
+
+The shared engine lives at `../Tools/icon_engine.py`; see `../Tools/README.md`.
 
 ---
 
@@ -42,9 +57,8 @@ If icons don't update immediately after the script finishes, press **F5** on the
 
 1. Right-click any shortcut → **Properties**.
 2. Go to the **Shortcut** tab → **Change Icon...**.
-3. Browse to `Icons\ICO\` and select the matching file.
+3. Browse to `Icons\Horizon_Glow\` or `Icons\Midnight_Ooo\` and pick the file.
 4. Click **Apply** → **OK**.
 
 ---
-
 *Created by Ayco.*

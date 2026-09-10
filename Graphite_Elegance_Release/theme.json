@@ -1,0 +1,15 @@
+{
+  "name": "Graphite Elegance",
+  "persist_key": "Graphite_Elegance_Release",
+  "icons_dir": "Icons/ICO",
+  "rename_invisible": true,
+  "cleanup_duplicates": true,
+  "order": [
+    "antigravity", "discord", "chrome", "jan", "excel", "word", "powerpoint",
+    "images", "classroom",
+    "steam", "riotclient", "epicgames", "rockstargameslauncher", "rockstargames",
+    "atlauncher", "valorant", "valoranttracker", "leagueoflegends", "repo", "stick",
+    "nvidiaapp", "nvidiabroadcast", "ccleaner", "memreduct", "geekuninstaller",
+    "obs", "medal"
+  ]
+}

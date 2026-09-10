@@ -1,0 +1,4 @@
+# Isoform — development dependencies (tests, lint). Tested on Python 3.11 / 3.12.
+-r requirements.txt
+pytest==8.3.2
+ruff==0.6.9

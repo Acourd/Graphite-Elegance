@@ -1,0 +1,8 @@
+{
+  "name": "KiraLight (Dark)",
+  "persist_key": "KiraLight_Dark",
+  "icons_dir": "Icons/ICO",
+  "rename_invisible": true,
+  "cleanup_duplicates": true,
+  "order": []
+}

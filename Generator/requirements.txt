@@ -1,0 +1,12 @@
+# Requisitos del generador de iconos (fijados).
+# Probado en Python 3.11 / 3.12.
+Pillow==10.4.0
+opencv-python==4.10.0.84
+numpy==1.26.4
+requests==2.32.3
+svglib==1.5.1
+reportlab==4.2.5
+
+# --- Opcionales ---
+# playwright==1.47.0   # graphite_builder.py (render SVG por Chromium)
+# rembg==2.0.57        # recorte fotorealista de fuentes con fondo

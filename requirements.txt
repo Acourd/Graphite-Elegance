@@ -1,0 +1,3 @@
+# Isoform — runtime dependencies for the desktop engine (Windows only).
+# Pinned on purpose: the engine never auto-installs anything.
+pywin32==308; sys_platform == "win32"
