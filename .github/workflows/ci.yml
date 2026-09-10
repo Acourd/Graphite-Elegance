@@ -20,6 +20,7 @@ jobs:
       - run: python -m pip install --upgrade pip
       - run: pip install -r requirements-dev.txt
       - run: python -m compileall -q Tools Generator/scripts
+      - run: python Generator/scripts/hash_assets.py --check
       - run: ruff check Tools tests
       - run: pytest
 

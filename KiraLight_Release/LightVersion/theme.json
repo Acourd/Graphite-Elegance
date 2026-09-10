@@ -2,7 +2,5 @@
   "name": "KiraLight (Light)",
   "persist_key": "KiraLight_Light",
   "icons_dir": "Icons/ICO",
-  "rename_invisible": true,
-  "cleanup_duplicates": true,
   "order": []
 }

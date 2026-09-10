@@ -41,16 +41,36 @@ Exit codes: `0` ok · `1` runtime/dependency error · `2` configuration error.
 
 ## Safety model
 
+- **Backup before mutation.** The manifest and copies of every affected file are
+  written **before** any change (icon edits, deletions and renames).
+- **Validated restore.** `--restore` validates the manifest schema, restricts
+  every path to an allowed Desktop root (user + public, or `ISO_DESKTOP_DIRS`)
+  and rewrites from the backed-up files — including the original names.
+- **Theme-scoped rename/organize.** `--rename` only renames shortcuts matched to
+  the active theme; `--organize` only considers shortcuts whose current icon
+  belongs to the theme.
 - **No auto-install.** Missing `pywin32` is a hard error pointing to the pinned
   `requirements.txt`.
 - **Duplicates by full identity.** `.lnk` identity = target + arguments +
   working directory, so distinct shortcuts are never deleted as duplicates.
 - **Duplicate icon names fail.** Two icons resolving to the same key is an
   error (no silent overwrite) unless `--allow-duplicate-icons`.
-- **Validated config.** `persist_key` and `icons_dir` are validated before use
-  (no absolute paths, no `..`).
-- **Backups.** Mutations are recorded in
-  `%LOCALAPPDATA%\Icons_Engine\backups\<persist_key>\<timestamp>\manifest.json`.
+- **Strict config.** Unknown `theme.json` keys are rejected; `persist_key` is
+  sanitized and `icons_dir` may not be absolute or escape the theme folder.
+- **Dry-run is inert.** No writes, no backup, no Explorer refresh, no prompt.
+
+## Backup format
+
+```text
+%LOCALAPPDATA%\Icons_Engine\backups\<persist_key>\<timestamp>\
+├── manifest.json          # schema, theme, created_at, entries[]
+└── files\
+    └── 0000_Chrome.url    # exact copy of the original file
+```
+
+Each `entries[]` item is `{op, path, backup}` (+ `new_path` for `op:"rename"`),
+where `op` is `modify`, `delete` or `rename`. Restoring copies `files/<backup>`
+back to `path` and, for renames, removes `new_path` first.
 
 ## `theme.json`
 
@@ -69,6 +89,8 @@ Exit codes: `0` ok · `1` runtime/dependency error · `2` configuration error.
 | `persist_key` | yes | `[A-Za-z0-9._-]`, no separators, not `..` |
 | `icons_dir` | yes | relative path inside the theme, no `..` |
 | `order` | no | list of strings for `--organize` |
+
+Unknown keys are rejected (no silently-ignored config).
 
 ## Themes and configs
 

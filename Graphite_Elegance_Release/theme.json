@@ -2,8 +2,6 @@
   "name": "Graphite Elegance",
   "persist_key": "Graphite_Elegance_Release",
   "icons_dir": "Icons/ICO",
-  "rename_invisible": true,
-  "cleanup_duplicates": true,
   "order": [
     "antigravity", "discord", "chrome", "jan", "excel", "word", "powerpoint",
     "images", "classroom",
