@@ -13,11 +13,28 @@ restored from the backup `Backup_Aycozen_20260611_022103`.
 Generator/
 ├── scripts/                 ← Python pipeline
 │   └── _legacy_appliers/    ← old applicators (historical, do not use)
+├── pipeline/                ← declarative build (sources.json + build.py)
 ├── assets/
-│   └── Raw_Silhouettes/     ← source logos (PNG / JPG / ICO)
+│   └── Raw_Silhouettes/     ← source logos (PNG / JPG / ICO) + .lock.json
 ├── requirements.txt
 └── README.md
 ```
+
+## Declarative build (`pipeline/`)
+
+`pipeline/sources.json` maps every reproducible output to a versioned local
+source, a style and an output folder. `pipeline/build.py` drives it:
+
+```bat
+python pipeline\build.py --check                                   :: manifest + hashes (stdlib only)
+python pipeline\build.py --apply                                   :: compose in place
+python pipeline\build.py --apply --only Graphite_Elegance_Release   :: one theme
+python pipeline\build.py --apply --output-dir build_out            :: to a scratch dir
+python pipeline\check_output.py build_out                          :: validate generated .ico
+```
+
+Styles: `graphite` (dark) and `lumina` (light). No Desktop access, no network,
+stable order — the same sources always yield the same frames.
 
 ## Pipeline
 

@@ -127,6 +127,11 @@ python Generator\scripts\generate_premium_icons.py --verify-sources
 :: opt-in, non-reproducible:
 :: python Generator\scripts\generate_premium_icons.py --online --from-desktop
 
+:: declarative build from pipeline/sources.json (reviewable manifest)
+python Generator\pipeline\build.py --check
+python Generator\pipeline\build.py --apply --output-dir build_out
+python Generator\pipeline\check_output.py build_out
+
 :: PNG/ICO master → multi-resolution .ico (16/32/48/64/128/256)
 python Generator\scripts\images_to_ico.py --input <theme>\Icons\ICO --overwrite --recursive
 
