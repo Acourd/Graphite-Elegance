@@ -1,8 +1,9 @@
 # Tools — shared icon engine
 
 A single engine applies the icons of **every** theme. Each theme ships only a
-`theme.json`; its `Tools/apply_desktop_icons.py` is a thin shim to
-`Tools/icon_engine.py`.
+`theme.json` plus a minimal launcher (`Tools\Install.bat`, or `Apply_Theme.ps1`)
+that calls `Tools/icon_engine.py` with its config — there is no per-theme
+applicator code.
 
 ## Commands
 

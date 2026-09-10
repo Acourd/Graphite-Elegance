@@ -29,14 +29,14 @@ only — it does **not** rename shortcuts.
 **Option B — manual (recommended flags)**
 
 ```cmd
-:: apply icons only (safe default)
-python Tools\apply_desktop_icons.py
+:: apply icons only (safe default), from this theme folder
+python ..\Tools\icon_engine.py --config theme.json
 
 :: hide shortcut names (opt-in; accessibility caveat) and clean launcher duplicates
-python Tools\apply_desktop_icons.py --rename --cleanup
+python ..\Tools\icon_engine.py --config theme.json --rename --cleanup
 
 :: preview without changing anything
-python Tools\apply_desktop_icons.py --dry-run
+python ..\Tools\icon_engine.py --config theme.json --dry-run
 ```
 
 The engine scans your Desktop (user + public) and applies the matching icon to

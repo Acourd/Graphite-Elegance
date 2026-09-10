@@ -20,7 +20,7 @@ Two sets — apps, games, tools, and AI.
 
 ---
 
-## How to Use — Auto (Python script)
+## How to Use — Auto (shared engine)
 
 > **Windows only.** Requires Python 3 installed on your system.
 
@@ -34,13 +34,13 @@ Double-click the launcher of the variant you want:
 **Option B — manual**
 
 ```cmd
-pip install pywin32
+pip install -r ..\requirements.txt
 
 :: Horizon Glow
-python Tools\apply_horizon_glow.py
+python ..\Tools\icon_engine.py --config theme_horizon_glow.json
 
 :: Midnight Ooo
-python Tools\apply_midnight_ooo.py
+python ..\Tools\icon_engine.py --config theme_midnight_ooo.json
 ```
 
 The engine scans your Desktop (user + public) and applies the matching icon to

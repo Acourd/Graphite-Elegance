@@ -20,14 +20,14 @@ and deliberately lo-fi.
 > **Windows only.** Requires Python 3. Install once: `pip install -r ..\requirements.txt`.
 
 ```cmd
-:: apply icons only (safe default)
-python Tools\apply_pixel_icons.py
+:: apply icons only (safe default), from this theme folder
+python ..\Tools\icon_engine.py --config theme.json
 
 :: hide shortcut names (opt-in) and clean launcher duplicates
-python Tools\apply_pixel_icons.py --rename --cleanup
+python ..\Tools\icon_engine.py --config theme.json --rename --cleanup
 
 :: preview without changing anything
-python Tools\apply_pixel_icons.py --dry-run
+python ..\Tools\icon_engine.py --config theme.json --dry-run
 ```
 
 Or double-click `Tools\Install.bat` (applies icons only). If icons don't update
