@@ -15,11 +15,9 @@ All icons ship the full 16/32/48/64/128/256 frame set
 > **Windows only.** Requires Python 3. Install once: `pip install -r ..\..\requirements.txt`.
 
 ```cmd
-:: Dark variant (from KiraLight_Release\DarkVersion)
-python Tools\apply_desktop_icons.py --rename --cleanup
-
-:: Light variant (from KiraLight_Release\LightVersion)
-python Tools\apply_desktop_icons.py --rename --cleanup
+:: run from DarkVersion\ or LightVersion\
+python ..\..\Tools\icon_engine.py --config theme.json
+python ..\..\Tools\icon_engine.py --config theme.json --rename --cleanup
 ```
 
 Each variant has its own `theme.json` (`persist_key` `KiraLight_Dark` /

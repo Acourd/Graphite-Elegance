@@ -1,15 +1,21 @@
-# Wrapper de PowerShell para aplicar el tema de iconos Graphite Elegance e invisibilizar nombres
+# Isoform launcher - runs the shared engine with this theme's config.
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$ApplicatorScript = Join-Path $ScriptDir "Tools\apply_desktop_icons.py"
+$Engine = Join-Path $ScriptDir "..\Tools\icon_engine.py"
+$Config = Join-Path $ScriptDir "theme.json"
 
-Write-Host "Iniciando aplicador estético de Graphite Elegance..." -ForegroundColor Cyan
-Write-Host "Los nombres de tus accesos directos se ocultarán para lograr un diseño limpio." -ForegroundColor DarkGray
-
-if (Test-Path $ApplicatorScript) {
-    py -3 $ApplicatorScript
-} else {
-    Write-Error "No se encontró el script de aplicación en $ApplicatorScript"
+Write-Host "Aplicando Graphite Elegance..." -ForegroundColor Cyan
+if (-not (Test-Path $Engine)) {
+    Write-Error "No se encontró el motor en $Engine"
+    exit 1
 }
 
-Write-Host "`nProceso finalizado. Si los iconos no se actualizan, presiona F5 en el escritorio." -ForegroundColor Green
+if (Get-Command py -ErrorAction SilentlyContinue) {
+    py -3 $Engine --config $Config
+} elseif (Get-Command python -ErrorAction SilentlyContinue) {
+    python $Engine --config $Config
+} else {
+    Write-Error "Python 3 no está instalado."
+}
+
+Write-Host "`nSi los iconos no se actualizan, presiona F5 en el escritorio." -ForegroundColor Green
 Start-Sleep -Seconds 3

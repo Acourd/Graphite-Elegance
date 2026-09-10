@@ -53,7 +53,7 @@ A collection of premium, minimalist, and geometric icon suites for Windows deskt
 └── [Theme]_Release/
     ├── Icons/ICO/                ← multi-resolution .ico (256, 128, 64, 48, 32, 16 px)
     ├── theme.json                ← theme config for the shared engine
-    ├── Tools/apply_desktop_icons.py  ← thin shim → Tools/icon_engine.py
+    ├── Tools/Install.bat         ← minimal launcher → ..\..\Tools\icon_engine.py
     └── Apply_Theme.ps1           ← launcher (Graphite only; others use Tools\Install.bat)
 ```
 
