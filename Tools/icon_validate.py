@@ -41,7 +41,7 @@ from icon_engine import (  # noqa: E402, I001
 )
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SKIP_DIRS = {".git", "Generator", "Tools", "tests", "node_modules", ".github"}
+SKIP_DIRS = {".git", "Tools", "tests", "node_modules", ".github"}
 
 
 # ---------------------------------------------------------------------------

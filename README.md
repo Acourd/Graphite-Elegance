@@ -42,10 +42,6 @@ A collection of premium, minimalist, and geometric icon suites for Windows deskt
 
 ```text
 .
-├── Generator/                    ← icon factory (scripts + raw assets)
-│   ├── scripts/                  ← silhouette → compose → PNG → .ico
-│   └── assets/Raw_Silhouettes/   ← source logos
-│
 ├── Tools/                        ← shared engine
 │   ├── icon_engine.py            ← one applicator + organizer for every theme
 │   └── icon_validate.py          ← icon resolution/name gate (used by CI)
@@ -108,41 +104,24 @@ a default.
 
 ---
 
-## 🏭 Regenerating & validating icons
+## ✅ Validating icons
 
-The factory is **reproducible by default**: it only reads the versioned local
-assets (`Generator/assets/Raw_Silhouettes`) in a stable order. Network lookups
-are opt-in.
+The released sets ship the full 16/32/48/64/128/256 frame set with unique names
+per variant. The gate is pure Python and cross-platform:
 
 ```bat
-:: factory setup
-pip install -r Generator\requirements.txt
-
-:: pin / verify the local source assets
-python Generator\scripts\hash_assets.py
-python Generator\scripts\hash_assets.py --check
-
-:: local, deterministic generation (verify first with --verify-sources)
-python Generator\scripts\generate_premium_icons.py --verify-sources
-:: opt-in, non-reproducible:
-:: python Generator\scripts\generate_premium_icons.py --online --from-desktop
-
-:: declarative build from pipeline/sources.json (reviewable manifest)
-python Generator\pipeline\build.py --check
-python Generator\pipeline\build.py --apply --output-dir build_out
-python Generator\pipeline\check_output.py build_out
-
-:: PNG/ICO master → multi-resolution .ico (16/32/48/64/128/256)
-python Generator\scripts\images_to_ico.py --input <theme>\Icons\ICO --overwrite --recursive
-
-:: gate: fails on incomplete resolutions, bad payloads or duplicate names
 python Tools\icon_validate.py --all
+python Tools\icon_validate.py --all --json
 ```
 
-> **Validation gate:** every released `.ico` carries the full
-> 16/32/48/64/128/256 frame set and unique names per variant.
-> `python Tools\icon_validate.py --all` → **0 errors, 0 warnings**. The contract
-> is documented in [docs/ICON_FORMAT.md](docs/ICON_FORMAT.md).
+> **Validation gate:** `python Tools\icon_validate.py --all` → **0 errors,
+> 0 warnings**. The contract is documented in
+> [docs/ICON_FORMAT.md](docs/ICON_FORMAT.md).
+
+> **Icon factory:** the generation pipeline (silhouette composition, source
+> assets and the declarative build) is maintained in a **separate private
+> repository** and is intentionally not part of this public repository. Only the
+> published `.ico` results live here.
 
 ---
 

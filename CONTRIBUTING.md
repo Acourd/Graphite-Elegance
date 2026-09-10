@@ -1,9 +1,11 @@
 # Contributing
 
-Thanks for improving Isoform. This project has two halves:
+Thanks for improving Isoform.
 
 - **`Tools/`** — the desktop engine (applicator/organizer). Windows-only at runtime.
-- **`Generator/`** — the icon factory (silhouettes → composed PNG → `.ico`).
+- The **icon factory** (silhouettes → composed PNG → `.ico`) lives in a separate
+  **private repository**; it is deliberately not part of this public repo. Only
+  the released `.ico` results are published here.
 
 ## Development setup
 
@@ -13,25 +15,20 @@ python -m venv .venv
 # Linux/mac: source .venv/bin/activate
 
 pip install -r requirements-dev.txt          # engine dev (tests, lint)
-pip install -r Generator/requirements.txt    # only if you touch the factory
 ```
 
 ## Running the checks CI runs
 
 ```bash
-python -m compileall -q Tools Generator/scripts
+python -m compileall -q Tools
 ruff check Tools tests
 pytest
 python Tools/icon_validate.py --all          # icon resolution/name gate
 ```
 
-`icon_validate.py --all` must pass. When you add icons, keep the full frame set
-and repair assets with the converter:
-
-```bash
-python Generator/scripts/images_to_ico.py \
-    --input  <theme>/Icons/ICO --overwrite --recursive
-```
+`icon_validate.py --all` must pass. New icons must keep the full frame set
+(see `docs/ICON_FORMAT.md`); they are produced by the private factory and
+dropped in as released `.ico` files.
 
 ## Icon contract
 

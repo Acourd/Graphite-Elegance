@@ -38,25 +38,16 @@ CI runs `--all` on every push/PR (`.github/workflows/ci.yml`, job
 `--allow-duplicate-icons` exists only as a **local escape hatch** for the
 applicator; it must **not** be used in CI.
 
-## Building / repairing icons
+## Producing icons
 
-`Generator/scripts/images_to_ico.py` is the conversion stage. It accepts a
-composed PNG/JPG master or an existing `.ico` (using its largest frame) and
-rewrites a clean multi-resolution file:
-
-```bash
-# one theme, in place
-python Generator/scripts/images_to_ico.py \
-    --input Lumina_Frost_Release/Icons/ICO --overwrite --recursive
-
-# a single file, different output folder
-python Generator/scripts/images_to_ico.py --input master.png --output out/
-```
+Icon generation and repair happen in the **private factory repository**
+(silhouette composition + the multi-resolution `.ico` converter). This public
+repository only carries the released `.ico` results; if you need to rebuild or
+repair a set, do it in the factory and drop the regenerated files in.
 
 ## History
 
 Earlier releases used a Pillow save that produced a duplicated `16 px` entry
 (`[16, 16, 32, 48, 64, 128, 256]`) in some Graphite and Lumina icons. That was
 benign (Windows ignores the duplicate) but non-standard. All such files were
-normalized with `images_to_ico.py`, so the validator now reports **0 warnings**.
-Keep new assets going through the converter to preserve this.
+normalized in the factory, so the validator now reports **0 warnings**.
