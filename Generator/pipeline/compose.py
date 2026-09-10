@@ -3,12 +3,24 @@ Shared composition for the Isoform icon factory.
 
 Pure functions (Pillow + OpenCV + NumPy) used by ``build.py``. Kept separate
 from the desktop applicator and from the legacy scripts.
+
+Styles are described declaratively (vertical RGB gradient, logo colour, border,
+shadow and an optional pixel-art mode) so new variants can be added without
+touching the rendering code.
 """
 from __future__ import annotations
+
+import os
+import sys
 
 import cv2
 import numpy as np
 from PIL import Image, ImageDraw
+
+_PIPELINE = os.path.dirname(os.path.abspath(__file__))
+if _PIPELINE not in sys.path:
+    sys.path.insert(0, _PIPELINE)
+from styles import STYLES  # noqa: E402
 
 SS = 4  # supersampling factor
 ICON_SIZES = (16, 32, 48, 64, 128, 256)
@@ -24,16 +36,7 @@ ICO_SPECS = {
     16: dict(logo_frac=0.68, border=False, shadow=False),
 }
 
-STYLES = {
-    "graphite": {
-        "grad_top": 45.0, "grad_bottom": 10.0,
-        "logo": (255, 255, 255), "border": True, "shadow": True,
-    },
-    "lumina": {
-        "grad_top": 255.0, "grad_bottom": 245.0,
-        "logo": (25, 25, 25), "border": False, "shadow": False,
-    },
-}
+# Palette reference: see styles.py.
 
 
 def extract_silhouette(img_rgba):
@@ -89,6 +92,12 @@ def extract_silhouette(img_rgba):
     return out, dict(coverage=coverage, islands=len(keep))
 
 
+def _logo_rgba(alpha8, color):
+    r, g, b = color
+    return np.dstack([np.full_like(alpha8, r), np.full_like(alpha8, g),
+                      np.full_like(alpha8, b), alpha8])
+
+
 def _resize_silhouette_aa(mask, target_long, color):
     x, y, bw, bh = cv2.boundingRect(mask)
     mask = mask[y:y + bh, x:x + bw]
@@ -102,30 +111,59 @@ def _resize_silhouette_aa(mask, target_long, color):
     a = cv2.resize(mask, new_wh, interpolation=interp).astype(np.float32) / 255
     a = np.clip((a - 0.30) / 0.40, 0, 1)
     a = a * a * (3 - 2 * a)
-    a8 = (a * 255).astype(np.uint8)
-    r, g, b = color
-    logo = np.dstack([np.full_like(a8, b), np.full_like(a8, g), np.full_like(a8, r), a8])
-    return Image.fromarray(logo, "RGBA")
+    return Image.fromarray(_logo_rgba((a * 255).astype(np.uint8), color), "RGBA")
+
+
+def _resize_silhouette_pixel(mask, target_long, color):
+    x, y, bw, bh = cv2.boundingRect(mask)
+    mask = mask[y:y + bh, x:x + bw]
+    scale = target_long / max(bw, bh)
+    new_wh = (max(1, round(bw * scale)), max(1, round(bh * scale)))
+    a = cv2.resize(mask, new_wh, interpolation=cv2.INTER_NEAREST)
+    a = np.where(a >= 128, 255, 0).astype(np.uint8)
+    return Image.fromarray(_logo_rgba(a, color), "RGBA")
+
+
+def _gradient(S, top, bottom):
+    rows = np.linspace(0.0, 1.0, S, dtype=np.float32)[:, None]
+    noise = np.random.default_rng(0).uniform(-0.5, 0.5, (S, S)).astype(np.float32)
+    rgb = np.zeros((S, S, 3), np.uint8)
+    for c in range(3):
+        g = top[c] + (bottom[c] - top[c]) * rows
+        rgb[:, :, c] = np.clip(np.broadcast_to(g, (S, S)) + noise, 0, 255).astype(np.uint8)
+    return rgb
 
 
 def compose_icon(mask, size, style):
     """Compose one size x size icon in the given style."""
     st = STYLES[style]
     spec = ICO_SPECS[size]
+
+    if st.get("pixelated"):
+        r, g, b = st["grad_top"]
+        canvas = Image.fromarray(
+            np.dstack([np.full((size, size), r, np.uint8),
+                       np.full((size, size), g, np.uint8),
+                       np.full((size, size), b, np.uint8),
+                       np.full((size, size), 255, np.uint8)]), "RGBA")
+        logo = _resize_silhouette_pixel(mask, max(1, int(size * spec["logo_frac"])), st["logo"])
+        off = ((size - logo.width) // 2, (size - logo.height) // 2)
+        canvas.alpha_composite(logo, off)
+        return canvas
+
+    S = size * SS
     border = st["border"] and spec["border"]
     shadow = st["shadow"] and spec["shadow"]
 
-    S = size * SS
-    radius = (60 / 256) * S
-
-    grad = np.linspace(st["grad_top"], st["grad_bottom"], S, dtype=np.float32)[:, None]
-    noise = np.random.default_rng(0).uniform(-0.5, 0.5, (S, S)).astype(np.float32)
-    g = np.clip(np.broadcast_to(grad, (S, S)) + noise, 0, 255).astype(np.uint8)
-    canvas = Image.fromarray(np.dstack([g, g, g, np.full((S, S), 255, np.uint8)]), "RGBA")
-
-    sq = Image.new("L", (S, S), 0)
-    ImageDraw.Draw(sq).rounded_rectangle((0, 0, S - 1, S - 1), radius, fill=255)
-    canvas.putalpha(sq)
+    rgb = _gradient(S, st["grad_top"], st["grad_bottom"])
+    canvas = Image.fromarray(np.dstack([rgb, np.full((S, S), 255, np.uint8)]), "RGBA")
+    if not st.get("square"):
+        radius = (60 / 256) * S
+        sq = Image.new("L", (S, S), 0)
+        ImageDraw.Draw(sq).rounded_rectangle((0, 0, S - 1, S - 1), radius, fill=255)
+        canvas.putalpha(sq)
+    else:
+        radius = 0
 
     if border:
         b = Image.new("RGBA", (S, S), (0, 0, 0, 0))
@@ -148,7 +186,8 @@ def compose_icon(mask, size, style):
         key_shifted = np.zeros_like(key)
         key_shifted[dy:, :] = key[:-dy, :]
         sh = np.clip(ambient + key_shifted, 0, 1)
-        sh *= np.asarray(sq, np.float32) / 255
+        if not st.get("square"):
+            sh *= np.asarray(canvas.getchannel("A"), np.float32) / 255
         sh_rgba = np.zeros((S, S, 4), np.uint8)
         sh_rgba[:, :, 3] = (sh * 255).astype(np.uint8)
         canvas.alpha_composite(Image.fromarray(sh_rgba, "RGBA"))

@@ -29,7 +29,12 @@ REPO = os.path.dirname(GENERATOR)
 SOURCES = os.path.join(PIPELINE, "sources.json")
 RAW = os.path.join(GENERATOR, "assets", "Raw_Silhouettes")
 LOCK = os.path.join(GENERATOR, "assets", "Raw_Silhouettes.lock.json")
-KNOWN_STYLES = {"graphite", "lumina"}
+
+if PIPELINE not in sys.path:
+    sys.path.insert(0, PIPELINE)
+from styles import STYLES  # noqa: E402
+
+KNOWN_STYLES = set(STYLES)
 
 
 def sha256(path):
