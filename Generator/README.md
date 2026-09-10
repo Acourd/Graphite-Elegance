@@ -31,10 +31,25 @@ python pipeline\build.py --apply                                   :: compose in
 python pipeline\build.py --apply --only Graphite_Elegance_Release   :: one theme
 python pipeline\build.py --apply --output-dir build_out            :: to a scratch dir
 python pipeline\check_output.py build_out                          :: validate generated .ico
+python pipeline\compare.py --generated build_out\<theme>\Icons\ICO --reference <theme>\Icons\ICO
 ```
 
-Styles: `graphite` (dark) and `lumina` (light). No Desktop access, no network,
+Styles live in `pipeline/styles.py` (`graphite`, `lumina`, `kiraldark`,
+`kiralight`, `horizon`, `midnight`, `pixel`). No Desktop access, no network,
 stable order — the same sources always yield the same frames.
+
+### Bootstrap sources (variants without originals)
+
+When a variant's original sources are lost, derive versioned silhouettes from
+the released icons once and commit them under `assets/derived/<slug>/`:
+
+```bat
+python pipeline\derive_sources.py --theme <theme>\Icons\ICO --out assets\derived\<slug>
+```
+
+The manifest then points that theme at its derived assets (per-theme `assets`
+plus a matching `.lock.json`). `compare.py` measures parity vs the released
+icons; all seven variants are currently at MAE <= ~17/255 (most <= 5).
 
 ## Pipeline
 
