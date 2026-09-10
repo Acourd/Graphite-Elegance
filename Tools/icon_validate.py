@@ -44,6 +44,14 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SKIP_DIRS = {".git", "Tools", "tests", "node_modules", ".github"}
 
 
+def _rel(path, start):
+    """relpath that survives being on a different Windows drive (C: vs D:)."""
+    try:
+        return os.path.relpath(path, start)
+    except ValueError:
+        return os.path.abspath(path)
+
+
 # ---------------------------------------------------------------------------
 def inspect_ico(path):
     """Return (sizes, errors, warnings) with structural + payload checks."""
@@ -105,7 +113,7 @@ def discover_configs(root):
 
 
 def validate_config(config_path, required=REQUIRED_ICO_SIZES, baseline=None):
-    result = {"config": os.path.relpath(config_path, REPO),
+    result = {"config": _rel(config_path, REPO),
               "name": None, "errors": [], "warnings": [], "checked": 0}
 
     try:
@@ -132,7 +140,7 @@ def validate_config(config_path, required=REQUIRED_ICO_SIZES, baseline=None):
                 continue
             result["checked"] += 1
             fpath = os.path.join(dirpath, fname)
-            rel = os.path.relpath(fpath, REPO)
+            rel = _rel(fpath, REPO)
             sizes, errs, warns = inspect_ico(fpath)
             covered_by_baseline = baseline and any(fnmatch.fnmatch(rel, p) for p in baseline)
             for err in errs:

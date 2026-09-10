@@ -112,10 +112,21 @@ def desktop_dirs():
     override = os.environ.get("ISO_DESKTOP_DIRS")
     if override:
         return [os.path.abspath(p) for p in override.split(os.pathsep) if p]
+    home = os.environ.get("USERPROFILE") or os.path.expanduser("~")
+    public = os.environ.get("PUBLIC", r"C:\Users\Public")
     return [
-        os.path.abspath(os.path.join(os.environ["USERPROFILE"], "Desktop")),
-        os.path.abspath(os.path.join(os.environ.get("PUBLIC", r"C:\Users\Public"), "Desktop")),
+        os.path.abspath(os.path.join(home, "Desktop")),
+        os.path.abspath(os.path.join(public, "Desktop")),
     ]
+
+
+def appdata_dir():
+    """Per-user data dir. Works off Windows too (never raises KeyError)."""
+    appdata = os.environ.get("LOCALAPPDATA")
+    if appdata:
+        return appdata
+    home = os.environ.get("USERPROFILE") or os.path.expanduser("~")
+    return os.path.join(home, "AppData", "Local")
 
 
 def is_within(path, roots):
@@ -138,6 +149,19 @@ def _shortcuts(desktop):
 # ---------------------------------------------------------------------------
 # Config validation
 # ---------------------------------------------------------------------------
+_WIN_ABS_RE = re.compile(r"^[A-Za-z]:[\\/]")
+
+
+def looks_absolute(path):
+    """Absolute on the current platform *and* for Windows-style paths."""
+    return os.path.isabs(path) or bool(_WIN_ABS_RE.match(path)) or path.startswith("\\\\")
+
+
+def has_traversal(path):
+    """True for '..' path components regardless of separator style."""
+    return any(part == ".." for part in path.replace("\\", "/").split("/"))
+
+
 def validate_config(cfg, source):
     """Validate a raw theme dict and return a resolved config."""
     errors = []
@@ -159,9 +183,9 @@ def validate_config(cfg, source):
     icons = cfg.get("icons_dir")
     if not isinstance(icons, str) or not icons.strip():
         errors.append("'icons_dir' debe ser texto no vacío")
-    elif os.path.isabs(icons):
+    elif looks_absolute(icons):
         errors.append("'icons_dir' no puede ser una ruta absoluta")
-    elif os.path.normpath(icons).startswith(".."):
+    elif has_traversal(icons):
         errors.append("'icons_dir' no puede salir de la carpeta del tema")
 
     order = cfg.get("order", [])
@@ -345,7 +369,7 @@ def _unique_invisible_name(folder, ext, used):
 # Backup / restore
 # ---------------------------------------------------------------------------
 def _backup_base(cfg):
-    appdata = os.environ.get("LOCALAPPDATA", os.path.join(os.environ["USERPROFILE"], "AppData", "Local"))
+    appdata = appdata_dir()
     return os.path.join(appdata, "Icons_Engine", "backups", cfg["persist_key"])
 
 
@@ -460,7 +484,7 @@ def restore_backup(backup_dir, dry_run=False):
 # ---------------------------------------------------------------------------
 def _publish_icons(cfg):
     src = cfg["icons_path"]
-    appdata = os.environ.get("LOCALAPPDATA", os.path.join(os.environ["USERPROFILE"], "AppData", "Local"))
+    appdata = appdata_dir()
     dest = os.path.join(appdata, "Icons_Engine", "Themes", cfg["persist_key"], "Icons")
     try:
         if os.path.exists(dest):

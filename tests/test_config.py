@@ -1,4 +1,5 @@
 import json
+import os
 
 import pytest
 
@@ -35,6 +36,27 @@ def test_valid_config_resolves_paths(tmp_path):
 def test_invalid_config_rejected(bad, tmp_path):
     with pytest.raises(ConfigError):
         validate_config(cfg(**bad), str(tmp_path / "theme.json"))
+
+
+# --- regression: path checks must behave the same on every OS --------------
+@pytest.mark.parametrize("bad_icons", [
+    "C:/abs/path",       # Windows drive, forward slashes
+    "C:\\abs\\path",     # Windows drive, backslashes
+    "\\\\server\\share",  # UNC
+    "/etc/passwd",       # POSIX absolute
+    "../outside",
+    "..\\outside",       # traversal with backslashes
+    "sub/../../escape",  # traversal hidden mid-path
+])
+def test_insecure_icon_dirs_rejected_consistently(bad_icons, tmp_path):
+    with pytest.raises(ConfigError):
+        validate_config(cfg(icons_dir=bad_icons), str(tmp_path / "theme.json"))
+
+
+def test_relative_subdir_is_accepted(tmp_path):
+    resolved = validate_config(cfg(icons_dir="assets/icons"),
+                               str(tmp_path / "theme.json"))
+    assert resolved["icons_path"].endswith(os.path.join("assets", "icons"))
 
 
 def test_load_config_missing_file(tmp_path):

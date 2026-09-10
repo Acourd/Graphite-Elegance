@@ -1,7 +1,8 @@
 import json
+import os
 import struct
 
-from icon_validate import read_ico_sizes, validate_config
+from icon_validate import _rel, read_ico_sizes, validate_config
 
 
 def make_ico(sizes):
@@ -76,3 +77,16 @@ def test_validate_baseline_downgrades(tmp_path):
     result = validate_config(str(cfg), baseline=["*Chrome.ico"])
     assert result["errors"] == []
     assert any("baseline" in w for w in result["warnings"])
+
+
+# --- regression: relpath across Windows drives (C: repo vs D: tmp) ---------
+def test_rel_falls_back_to_absolute_across_drives(monkeypatch):
+    import icon_validate
+
+    def _boom(path, start=None):
+        raise ValueError("path is on mount 'C:', start on mount 'D:'")
+
+    monkeypatch.setattr(icon_validate.os.path, "relpath", _boom)
+    out = _rel(r"C:\tmp\Theme\Chrome.ico", r"D:\repo")
+    assert os.path.isabs(out)
+    assert out.endswith("Chrome.ico")

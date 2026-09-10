@@ -5,8 +5,11 @@ import pytest
 
 from icon_engine import (
     BackupError,
+    _backup_base,
     _safe_backup_file,
+    appdata_dir,
     create_backup,
+    desktop_dirs,
     is_within,
     validate_manifest,
 )
@@ -81,3 +84,26 @@ def test_create_backup_copies_files(tmp_path, monkeypatch):
     assert manifest["entries"][0]["op"] == "delete"
     copied = list((tmp_path / "appdata").rglob("0000_old.lnk"))
     assert copied and copied[0].read_bytes() == b"original"
+
+
+# --- regression: environment lookups must not be eager / Windows-only -------
+def test_backup_base_does_not_require_userprofile(tmp_path, monkeypatch):
+    # Before the fix, LOCALAPPDATA's default argument evaluated USERPROFILE
+    # eagerly and raised KeyError on Linux even when LOCALAPPDATA was set.
+    monkeypatch.delenv("USERPROFILE", raising=False)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "appdata"))
+    base = _backup_base({"persist_key": "T_Key"})
+    assert base.startswith(str(tmp_path / "appdata"))
+
+
+def test_appdata_dir_falls_back_without_userprofile(monkeypatch):
+    monkeypatch.delenv("LOCALAPPDATA", raising=False)
+    monkeypatch.delenv("USERPROFILE", raising=False)
+    assert appdata_dir()  # must not raise
+
+
+def test_desktop_dirs_without_userprofile(monkeypatch):
+    monkeypatch.delenv("ISO_DESKTOP_DIRS", raising=False)
+    monkeypatch.delenv("USERPROFILE", raising=False)
+    dirs = desktop_dirs()
+    assert dirs and all(isinstance(d, str) for d in dirs)
