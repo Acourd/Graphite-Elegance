@@ -775,6 +775,145 @@
           "output": "Wallpaper Engine"
         }
       ]
+    },
+    {
+      "name": "White_Space_Pixel_Release",
+      "style": "pixel",
+      "icons_dir": "White_Space_Pixel_Release/Icons/ICO",
+      "targets": [
+        {
+          "source": "Ai Studio.png",
+          "output": "AI Studio"
+        },
+        {
+          "source": "Aimlabs.ico",
+          "output": "Aimlabs"
+        },
+        {
+          "source": "Antigravity.jpg",
+          "output": "Antigravity"
+        },
+        {
+          "source": "ATLauncher.png",
+          "output": "ATLauncher"
+        },
+        {
+          "source": "Blitz.jpg",
+          "output": "Blitz"
+        },
+        {
+          "source": "Chatgpt.ico",
+          "output": "Chatgpt"
+        },
+        {
+          "source": "Chrome.ico",
+          "output": "Chrome"
+        },
+        {
+          "source": "Classroom.png",
+          "output": "Classroom"
+        },
+        {
+          "source": "Claude Ai.png",
+          "output": "Claude Ai"
+        },
+        {
+          "source": "Edge.png",
+          "output": "Edge"
+        },
+        {
+          "source": "Epic Games.png",
+          "output": "Epic Games"
+        },
+        {
+          "source": "Geek Uninstaller.png",
+          "output": "Geek Uninstaller"
+        },
+        {
+          "source": "Gemini.png",
+          "output": "Gemini"
+        },
+        {
+          "source": "Github.png",
+          "output": "Github"
+        },
+        {
+          "source": "Helium.png",
+          "output": "Helium"
+        },
+        {
+          "source": "Images.png",
+          "output": "Images"
+        },
+        {
+          "source": "Iso.png",
+          "output": "Iso"
+        },
+        {
+          "source": "Kindle.jpg",
+          "output": "Kindle"
+        },
+        {
+          "source": "Kovacks.jpg",
+          "output": "Kovacks"
+        },
+        {
+          "source": "Labymod.png",
+          "output": "Labymod"
+        },
+        {
+          "source": "Lossless Scaling.png",
+          "output": "Lossless Scaling"
+        },
+        {
+          "source": "Medal.png",
+          "output": "Medal"
+        },
+        {
+          "source": "Minecraft.png",
+          "output": "Minecraft"
+        },
+        {
+          "source": "Mini Cozy Room.png",
+          "output": "Mini Cozy Room"
+        },
+        {
+          "source": "MSIafterburner.jpg",
+          "output": "Msiafterburner"
+        },
+        {
+          "source": "NotebookLM.png",
+          "output": "NotebookLM"
+        },
+        {
+          "source": "Olympus.png",
+          "output": "Olympus"
+        },
+        {
+          "source": "Opendesign.png",
+          "output": "Opendesign"
+        },
+        {
+          "source": "Process Lasso.png",
+          "output": "Process Lasso"
+        },
+        {
+          "source": "Terraria.ico",
+          "output": "Terraria"
+        },
+        {
+          "source": "tModLoader.png",
+          "output": "tModLoader"
+        },
+        {
+          "source": "Valorant Tracker.png",
+          "output": "Valorant Tracker"
+        },
+        {
+          "source": "Wallpaper Engine.png",
+          "output": "Wallpaper Engine"
+        }
+      ]
     }
   ]
 }
