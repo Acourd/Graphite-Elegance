@@ -64,7 +64,8 @@ The engine lives once at `Tools/icon_engine.py`; each theme only carries a
 2. Open the theme folder (e.g. `Graphite_Elegance_Release`).
 3. Launch it:
    - **Graphite Elegance** ships `Apply_Theme.ps1` (Right-click ➔ *Run with PowerShell*).
-   - **All themes** have `Tools\Install.bat` (double-click).
+   - **Most themes** have `Tools\Install.bat`; **Ooo** ships
+     `Tools\apply_horizon_glow.bat` and `Tools\apply_midnight_ooo.bat`.
    - Or call the engine directly (commands below).
 
 By default this only **applies icons**. Destructive / cosmetic steps are
@@ -130,6 +131,12 @@ python Tools\icon_validate.py --all --json
 - [CONTRIBUTING.md](CONTRIBUTING.md) — dev setup, checks, contracts.
 - [LICENSE](LICENSE) — MIT (third-party logos excluded).
 - [SECURITY.md](SECURITY.md) — safety model and vulnerability reporting.
+
+### Third-party logos
+Some rendered icons embed third-party brand logos (sourced via SimpleIcons /
+Clearbit). Those marks are the property of their respective owners and are
+**not** covered by this project's license. Confirm your rights before
+redistributing or using them commercially.
 
 ---
 *Developed with mathematical rigor and aesthetic passion. © 2026 Acourd.*

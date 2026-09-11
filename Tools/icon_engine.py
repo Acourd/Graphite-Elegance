@@ -39,6 +39,7 @@ import re
 import shutil
 import sys
 import time
+import uuid
 
 INVISIBLE = "\u00a0"
 REQUIRED_ICO_SIZES = (16, 32, 48, 64, 128, 256)
@@ -262,6 +263,14 @@ def _key_from_icon_path(raw):
     return os.path.splitext(os.path.basename(candidate))[0].lower()
 
 
+def _icon_file_from_raw(raw):
+    """Path part of an IconLocation/IconFile value (before the index)."""
+    if not raw:
+        return None
+    candidate = raw.split(",", 1)[0].strip().strip('"')
+    return candidate or None
+
+
 def _lookup(key, available):
     if not key:
         return None
@@ -285,14 +294,13 @@ def shortcut_identity(shell, path):
             return None
     if ext == ".url":
         try:
-            with open(path, "r", encoding="utf-8", errors="ignore") as fh:
-                for line in fh:
-                    if line.lower().startswith("url="):
-                        url_val = line.split("=", 1)[1].strip().lower()
-                        if url_val.startswith("steam://rungameid/"):
-                            appid = "".join(c for c in url_val.split("steam://rungameid/")[1] if c.isdigit())
-                            return f"url|steam:{appid}"
-                        return f"url|{url_val}"
+            for line in _read_url(path)[0]:
+                if line.lower().startswith("url="):
+                    url_val = line.split("=", 1)[1].strip().lower()
+                    if url_val.startswith("steam://rungameid/"):
+                        appid = "".join(c for c in url_val.split("steam://rungameid/")[1] if c.isdigit())
+                        return f"url|steam:{appid}"
+                    return f"url|{url_val}"
         except OSError:
             return None
     return None
@@ -349,9 +357,26 @@ def _resolve_url(lines, shortcut_path, available):
 # ---------------------------------------------------------------------------
 # Invisible names
 # ---------------------------------------------------------------------------
+def _read_url(path):
+    """Return (lines, encoding), tolerating UTF-16 and legacy encodings."""
+    with open(path, "rb") as fh:
+        data = fh.read()
+    if data[:2] in (b"\xff\xfe", b"\xfe\xff"):
+        encoding = "utf-16"
+    elif data[:3] == b"\xef\xbb\xbf":
+        encoding = "utf-8-sig"
+    else:
+        encoding = "utf-8"
+    try:
+        text = data.decode(encoding)
+    except UnicodeDecodeError:
+        encoding = "cp1252"
+        text = data.decode(encoding, errors="replace")
+    return text.splitlines(keepends=True), encoding
+
+
 def _read_url_lines(path):
-    with open(path, "r", encoding="utf-8", errors="ignore") as fh:
-        return fh.readlines()
+    return _read_url(path)[0]
 
 
 def is_invisible_name(name):
@@ -373,10 +398,23 @@ def _backup_base(cfg):
     return os.path.join(appdata, "Icons_Engine", "backups", cfg["persist_key"])
 
 
+def _new_backup_dir(cfg):
+    """Create a unique backup directory (timestamp + uuid, exclusive)."""
+    root = _backup_base(cfg)
+    for _ in range(10):
+        candidate = os.path.join(root, f"{time.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:8]}")
+        try:
+            os.makedirs(candidate, exist_ok=False)
+            return candidate
+        except FileExistsError:
+            continue
+    raise BackupError("No se pudo crear un directorio de backup único")
+
+
 def create_backup(cfg, entries):
     """Copy every affected shortcut into a timestamped backup and write a
     manifest. ``entries`` is a list of dicts: {op, path[, new_path]}."""
-    base = os.path.join(_backup_base(cfg), time.strftime("%Y%m%d-%H%M%S"))
+    base = _new_backup_dir(cfg)
     files_dir = os.path.join(base, "files")
     os.makedirs(files_dir, exist_ok=True)
     manifest_entries = []
@@ -482,17 +520,25 @@ def restore_backup(backup_dir, dry_run=False):
 # ---------------------------------------------------------------------------
 # Icon publication (keeps shortcut links valid if the repo moves)
 # ---------------------------------------------------------------------------
+def _published_icons_dir(cfg):
+    return os.path.join(appdata_dir(), "Icons_Engine", "Themes", cfg["persist_key"], "Icons")
+
+
 def _publish_icons(cfg):
     src = cfg["icons_path"]
-    appdata = appdata_dir()
-    dest = os.path.join(appdata, "Icons_Engine", "Themes", cfg["persist_key"], "Icons")
+    dest = _published_icons_dir(cfg)
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    staging = f"{dest}.staging-{uuid.uuid4().hex[:8]}"
     try:
-        if os.path.exists(dest):
+        shutil.copytree(src, staging)          # build staging first
+        if os.path.exists(dest):               # replace only after a full copy
             shutil.rmtree(dest)
-        shutil.copytree(src, dest)
+        os.rename(staging, dest)
         print(f"  [INFO] Iconos publicados en: {dest}")
         return dest
     except OSError as exc:
+        if os.path.exists(staging):
+            shutil.rmtree(staging, ignore_errors=True)
         print(f"  [WARN] No se pudo publicar ({exc}). Se usarán los iconos locales.")
         return src
 
@@ -582,19 +628,16 @@ def apply_theme(cfg, dry_run=False, cleanup=False, rename=False, yes=False,
     if not os.path.isdir(cfg["icons_path"]):
         raise ConfigError(f"No se encontró la carpeta de iconos: {cfg['icons_path']}")
 
-    if dry_run:
-        icons_dir = cfg["icons_path"]
-        print(f"  [DRY] usaría {icons_dir} (sin publicar)")
-    else:
-        icons_dir = _publish_icons(cfg)
-
-    available = index_icons(icons_dir, allow_duplicates=allow_duplicate_icons)
+    # Plan against the source tree (read-only); nothing is published yet.
+    available = index_icons(cfg["icons_path"], allow_duplicates=allow_duplicate_icons)
     print(f"=== {cfg['name']} ===  ({len(available)} claves de icono)")
 
     pythoncom.CoInitialize()
     shell = win32com.client.Dispatch("WScript.Shell")
     dup_deletions, changes, renames, unmatched = plan_apply(
         cfg, available, shell, cleanup=cleanup, rename=rename)
+    for c in changes:
+        c["icon_rel"] = os.path.relpath(c["icon_path"], cfg["icons_path"])
 
     print(f"\nPlan: {len(changes)} iconos · {len(dup_deletions)} duplicados a borrar"
           f" · {len(renames)} renombrados · limpieza={'sí' if cleanup else 'no'}"
@@ -627,6 +670,11 @@ def apply_theme(cfg, dry_run=False, cleanup=False, rename=False, yes=False,
             pythoncom.CoUninitialize()
             return 0
 
+    # Publish only after confirmation, via staging + atomic replace.
+    published = _publish_icons(cfg)
+    for c in changes:
+        c["icon_path"] = os.path.join(published, c["icon_rel"])
+
     # --- Backup BEFORE any mutation (merging rename over modify per path) ---
     by_path = {}
     for p in dup_deletions:
@@ -654,7 +702,7 @@ def apply_theme(cfg, dry_run=False, cleanup=False, rename=False, yes=False,
                 sc.IconLocation = f"{c['icon_path']}, 0"
                 sc.Save()
             else:
-                lines = _read_url_lines(c["path"])
+                lines, encoding = _read_url(c["path"])
                 has_icon = False
                 for i, line in enumerate(lines):
                     if line.lower().startswith("iconfile="):
@@ -668,7 +716,7 @@ def apply_theme(cfg, dry_run=False, cleanup=False, rename=False, yes=False,
                             lines.insert(i + 1, f"IconFile={c['icon_path']}\n")
                             lines.insert(i + 2, "IconIndex=0\n")
                             break
-                with open(c["path"], "w", encoding="utf-8") as fh:
+                with open(c["path"], "w", encoding=encoding) as fh:
                     fh.writelines(lines)
             _notify_file(c["path"])
             applied += 1
@@ -703,6 +751,7 @@ def apply_theme(cfg, dry_run=False, cleanup=False, rename=False, yes=False,
 def organize_desktop(cfg, dry_run=False, yes=False):
     win32com, pythoncom = _com()
     keys = set(index_icons(cfg["icons_path"]).keys())
+    allowed = [cfg["icons_path"], _published_icons_dir(cfg)]
     pythoncom.CoInitialize()
     shell = win32com.client.Dispatch("WScript.Shell")
     order = [k.replace(" ", "").lower() for k in cfg.get("order", [])]
@@ -715,15 +764,19 @@ def organize_desktop(cfg, dry_run=False, yes=False):
             ext = os.path.splitext(path)[1].lower()
             try:
                 if ext == ".lnk":
-                    key = _key_from_icon_path(shell.CreateShortcut(path).IconLocation)
+                    raw = shell.CreateShortcut(path).IconLocation
                 else:
                     lines = _read_url_lines(path)
-                    current = next((ln.split("=", 1)[1].strip()
-                                    for ln in lines if ln.lower().startswith("iconfile=")), None)
-                    key = _key_from_icon_path(current)
+                    raw = next((ln.split("=", 1)[1].strip()
+                                for ln in lines if ln.lower().startswith("iconfile=")), None)
             except Exception:
                 continue
+            key = _key_from_icon_path(raw)
+            icon_file = _icon_file_from_raw(raw)
             if not key or key.replace(" ", "") not in keys:
+                continue
+            # Only organize shortcuts whose icon lives in this theme's tree.
+            if not icon_file or not is_within(icon_file, allowed):
                 continue
             items.append({"path": path, "desktop": desktop, "ext": ext,
                           "key": key.replace(" ", "").lower()})

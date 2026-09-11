@@ -107,3 +107,17 @@ def test_desktop_dirs_without_userprofile(monkeypatch):
     monkeypatch.delenv("USERPROFILE", raising=False)
     dirs = desktop_dirs()
     assert dirs and all(isinstance(d, str) for d in dirs)
+
+
+# --- regression: two runs in the same second must not share a backup dir ----
+def test_backups_are_unique_within_same_second(tmp_path, monkeypatch):
+    desktop = _desktop(tmp_path, monkeypatch)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "appdata"))
+    victim = desktop / "a.lnk"
+    victim.write_bytes(b"x")
+    cfg = {"persist_key": "T_Key"}
+    first = create_backup(cfg, [{"op": "delete", "path": str(victim)}])
+    second = create_backup(cfg, [{"op": "delete", "path": str(victim)}])
+    assert first != second
+    assert os.path.isfile(os.path.join(first, "manifest.json"))
+    assert os.path.isfile(os.path.join(second, "manifest.json"))

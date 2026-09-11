@@ -1,4 +1,4 @@
-from icon_engine import shortcut_identity
+from icon_engine import _icon_file_from_raw, _read_url, shortcut_identity
 
 
 class FakeShortcut:
@@ -49,3 +49,33 @@ def test_url_identity_plain(tmp_path):
     f = tmp_path / "web.url"
     f.write_text("[InternetShortcut]\nURL=https://example.com/x\n", encoding="utf-8")
     assert shortcut_identity(None, str(f)) == "url|https://example.com/x"
+
+
+# --- regression: .url encoded in UTF-16 / legacy encodings ------------------
+def test_url_identity_utf16(tmp_path):
+    f = tmp_path / "u16.url"
+    f.write_bytes("[InternetShortcut]\nURL=https://example.com/x\n".encode("utf-16"))
+    assert shortcut_identity(None, str(f)) == "url|https://example.com/x"
+
+
+def test_read_url_detects_utf16(tmp_path):
+    f = tmp_path / "u16b.url"
+    f.write_bytes("URL=https://a/\n".encode("utf-16"))
+    lines, encoding = _read_url(str(f))
+    assert encoding == "utf-16"
+    assert any("https://a/" in line for line in lines)
+
+
+def test_read_url_falls_back_to_cp1252(tmp_path):
+    f = tmp_path / "ansi.url"
+    f.write_bytes("URL=https://example.com/caf\xe9\n".encode("latin-1"))
+    lines, encoding = _read_url(str(f))
+    assert encoding == "cp1252"
+    assert any("caf\xe9" in line for line in lines)
+
+
+def test_icon_file_from_raw():
+    assert _icon_file_from_raw(r"C:\a\Chrome.ico,0") == r"C:\a\Chrome.ico"
+    assert _icon_file_from_raw(r'"C:\a\Chrome.ico",0') == r"C:\a\Chrome.ico"
+    assert _icon_file_from_raw("") is None
+    assert _icon_file_from_raw(None) is None

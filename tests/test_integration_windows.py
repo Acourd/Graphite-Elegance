@@ -99,3 +99,17 @@ def test_organize_ignores_non_theme_shortcuts(world, capsys):
     assert "chrome" in out
     assert "other" not in out
 
+
+def test_organize_ignores_foreign_icon_path(world, capsys):
+    # Same icon name, but the referenced file lives in another theme's tree.
+    desktop, cfg = world
+    other = desktop.parent / "Other_Release" / "Icons" / "ICO"
+    other.mkdir(parents=True)
+    source_icon = desktop.parent / "Theme_Release" / "Icons" / "ICO" / "Chrome.ico"
+    (other / "Chrome.ico").write_bytes(source_icon.read_bytes())
+    (desktop / "Chrome.url").write_text(
+        "[InternetShortcut]\nURL=https://example.com/\n"
+        f"IconFile={other / 'Chrome.ico'}\nIconIndex=0\n", encoding="utf-8")
+    assert organize_desktop(cfg, dry_run=True) == 0
+    assert "chrome" not in capsys.readouterr().out.lower()
+
