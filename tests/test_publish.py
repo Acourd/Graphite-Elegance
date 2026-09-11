@@ -71,3 +71,31 @@ def test_publish_swap_failure_rolls_back(tmp_path, monkeypatch):
     assert os.path.isfile(sentinel)
     assert returned == cfg["icons_path"]
     assert not any(".staging-" in n for n in os.listdir(os.path.dirname(dest)))
+
+
+def test_publish_rollback_failure_keeps_previous(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "appdata"))
+    src = _theme_dir(tmp_path)
+    cfg = {"persist_key": "T_Key", "icons_path": str(src)}
+
+    dest = _published_icons_dir(cfg)
+    os.makedirs(dest)
+    with open(os.path.join(dest, "OLD.ico"), "wb") as fh:
+        fh.write(b"old")
+
+    real_rename = os.rename
+
+    def flaky(source, target, *args, **kwargs):
+        base = os.path.basename(source)
+        if base.startswith("Icons.staging-") or base == "Icons.previous":
+            raise OSError("locked")
+        return real_rename(source, target, *args, **kwargs)
+
+    monkeypatch.setattr(os, "rename", flaky)
+    returned = _publish_icons(cfg)
+
+    # Swap and rollback both failed: the previous tree must survive untouched.
+    previous = dest + ".previous"
+    assert os.path.isfile(os.path.join(previous, "OLD.ico"))
+    assert not os.path.exists(dest)
+    assert returned == cfg["icons_path"]

@@ -269,7 +269,7 @@ def _split_icon_ref(raw):
     quoted = re.match(r'^"(?P<path>.*)"\s*,\s*(?P<index>-?\d+)$', text)
     if quoted:
         return quoted.group("path"), int(quoted.group("index"))
-    plain = re.match(r"^(?P<path>.*),(?P<index>-?\d+)$", text)
+    plain = re.match(r"^(?P<path>.*),\s*(?P<index>-?\d+)$", text)
     if plain:
         return plain.group("path"), int(plain.group("index"))
     only_quoted = re.match(r'^"(?P<path>.*)"$', text)
@@ -526,22 +526,44 @@ def restore_backup(backup_dir, dry_run=False):
             print(f"  [DRY] restauraría {entry['op']}: {entry['path']}")
         return 0
 
+    # Phase 1: stage every restore next to its destination (all-or-nothing).
+    # If any copy fails, nothing has been replaced yet.
+    staged = []
+    try:
+        for entry, backup_file in resolved:
+            target = entry["path"]
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            temp = f"{target}.isoform-restore-{uuid.uuid4().hex[:8]}"
+            shutil.copy2(backup_file, temp)
+            staged.append((entry, temp))
+    except OSError as exc:
+        for _entry, temp in staged:
+            try:
+                os.remove(temp)
+            except OSError:
+                pass
+        raise BackupError(f"No se pudo preparar la restauración (nada restaurado): {exc}")
+
+    # Phase 2: move the staged files into place (rename, no copy).
     restored = 0
     failures = 0
-    for entry, backup_file in resolved:
+    for entry, temp in staged:
         try:
             if entry["op"] == "rename":
                 new_path = entry["new_path"]
                 if os.path.exists(new_path):
                     os.remove(new_path)
                     _notify_file(new_path)
-            os.makedirs(os.path.dirname(entry["path"]), exist_ok=True)
-            shutil.copy2(backup_file, entry["path"])
+            os.replace(temp, entry["path"])
             _notify_file(entry["path"])
             restored += 1
         except OSError as exc:
             failures += 1
             print(f"  [WARN] no se pudo restaurar {entry['path']}: {exc}")
+            try:
+                os.remove(temp)
+            except OSError:
+                pass
     _notify_shell()
     print(f"\nRestaurados {restored} elementos desde {backup_dir}.")
     if failures:
@@ -579,10 +601,17 @@ def _publish_icons(cfg):
             moved_previous = True
         os.rename(staging, dest)               # atomic-ish swap
     except OSError as exc:
+        rolled_back = not moved_previous
         if moved_previous and not os.path.exists(dest) and os.path.exists(previous):
-            os.rename(previous, dest)          # roll back so nothing is lost
+            try:
+                os.rename(previous, dest)      # roll back so nothing is lost
+                rolled_back = True
+            except OSError as rollback_exc:
+                print(f"  [ERROR] No se pudo revertir la publicación ({rollback_exc}). "
+                      f"El árbol anterior queda en: {previous}", file=sys.stderr)
         shutil.rmtree(staging, ignore_errors=True)
-        print(f"  [WARN] No se pudo publicar ({exc}). Se usarán los iconos locales.")
+        if rolled_back:
+            print(f"  [WARN] No se pudo publicar ({exc}). Se usarán los iconos locales.")
         return src
     print(f"  [INFO] Iconos publicados en: {dest}")
     return dest

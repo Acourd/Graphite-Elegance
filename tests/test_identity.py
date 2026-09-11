@@ -96,6 +96,14 @@ def test_icon_ref_with_comma_in_path():
     assert _icon_file_from_raw(r"C:\a,b\Chrome.ico") == r"C:\a,b\Chrome.ico"
 
 
+def test_icon_ref_index_with_whitespace():
+    # Common Windows form: 'path, 0' with a space (or tab) before the index.
+    assert _icon_file_from_raw(r"C:\a\Chrome.ico, 0") == r"C:\a\Chrome.ico"
+    assert _key_from_icon_path(r"C:\a\Chrome.ico, 0") == "chrome"
+    assert _icon_file_from_raw("C:\\a\\Chrome.ico,\t0") == "C:\\a\\Chrome.ico"
+    assert _key_from_icon_path('"C:\\a\\Chrome.ico", 0') == "chrome"
+
+
 def test_url_identity_case_sensitive(tmp_path):
     f1 = tmp_path / "a.url"
     f1.write_text("[InternetShortcut]\nURL=https://example.com/Case\n", encoding="utf-8")

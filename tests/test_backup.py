@@ -156,3 +156,35 @@ def test_restore_does_not_require_pywin32(tmp_path, monkeypatch):
     monkeypatch.setattr(icon_engine, "_com", no_com)
     assert restore_backup(backup, dry_run=False) == 0
     assert victim.read_bytes() == b"original"
+
+
+def test_restore_is_all_or_nothing_on_copy_failure(tmp_path, monkeypatch):
+    import icon_engine
+
+    desktop = _desktop(tmp_path, monkeypatch)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "appdata"))
+    first = desktop / "a.lnk"
+    second = desktop / "b.lnk"
+    first.write_bytes(b"A0")
+    second.write_bytes(b"B0")
+    backup = create_backup({"persist_key": "T_Key"},
+                           [{"op": "modify", "path": str(first)},
+                            {"op": "modify", "path": str(second)}])
+    first.write_bytes(b"A1")
+    second.write_bytes(b"B1")
+
+    real_copy2 = icon_engine.shutil.copy2
+    calls = {"n": 0}
+
+    def flaky(src, dst, *args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise OSError("fallo de I/O")
+        return real_copy2(src, dst, *args, **kwargs)
+
+    monkeypatch.setattr(icon_engine.shutil, "copy2", flaky)
+    with pytest.raises(BackupError):
+        restore_backup(backup, dry_run=False)
+    # Staging fails before any destination is replaced.
+    assert first.read_bytes() == b"A1"
+    assert second.read_bytes() == b"B1"
