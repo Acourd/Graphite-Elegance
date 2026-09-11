@@ -282,7 +282,8 @@ def _key_from_icon_path(raw):
     path, _index = _split_icon_ref(raw)
     if not path or not path.lower().endswith(".ico"):
         return None
-    return os.path.splitext(os.path.basename(path))[0].lower()
+    name = path.replace("\\", "/").rsplit("/", 1)[-1]
+    return os.path.splitext(name)[0].lower()
 
 
 def _icon_file_from_raw(raw):
@@ -298,18 +299,23 @@ def _lookup(key, available):
     return available.get(key) or available.get(key.replace(" ", ""))
 
 
+def _norm_win_path(value):
+    """Case/separator normalization for Windows paths, regardless of host OS."""
+    return (value or "").replace("/", "\\").strip().lower()
+
+
 def shortcut_identity(shell, path):
     """Full identity so distinct shortcuts are never deduped by mistake."""
     ext = os.path.splitext(path)[1].lower()
     if ext == ".lnk":
         try:
             sc = shell.CreateShortcut(path)
-            target = os.path.normcase((sc.TargetPath or "").replace("/", "\\").strip())
+            target = _norm_win_path(sc.TargetPath)
             if not target:
                 return None
-            # Windows paths are case-insensitive (normcase); arguments are not.
+            # Windows paths are case-insensitive; arguments are not.
             args = (getattr(sc, "Arguments", "") or "").strip()
-            wd = os.path.normcase((getattr(sc, "WorkingDirectory", "") or "").replace("/", "\\").strip())
+            wd = _norm_win_path(getattr(sc, "WorkingDirectory", ""))
             return f"lnk|{target}|{args}|{wd}"
         except Exception:
             return None
