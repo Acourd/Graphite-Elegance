@@ -113,3 +113,54 @@ def test_organize_ignores_foreign_icon_path(world, capsys):
     assert organize_desktop(cfg, dry_run=True) == 0
     assert "chrome" not in capsys.readouterr().out.lower()
 
+
+def test_reapplying_is_idempotent(world, capsys):
+    desktop, cfg = world
+    (desktop / "Chrome.url").write_text(_url("Chrome", "https://example.com/"), encoding="utf-8")
+    assert apply_theme(cfg, yes=True, rename=False, cleanup=False) == 0
+
+    backups_root = desktop.parent / "appdata" / "Icons_Engine" / "backups" / "Test_Key"
+    assert len(glob.glob(str(backups_root / "*"))) == 1
+    capsys.readouterr()
+
+    # Re-applying an already-published theme must be a no-op (no phantom change,
+    # no extra backup, no shortcut rewrite).
+    assert apply_theme(cfg, yes=True, rename=False, cleanup=False) == 0
+    assert "nada que hacer" in capsys.readouterr().out.lower()
+    assert len(glob.glob(str(backups_root / "*"))) == 1
+
+
+def test_organize_twice_is_idempotent(world, capsys):
+    desktop, cfg = world
+    (desktop / "Chrome.url").write_text(_url("Chrome", "https://example.com/"), encoding="utf-8")
+    assert apply_theme(cfg, yes=True, rename=False, cleanup=False) == 0
+    capsys.readouterr()
+
+    assert organize_desktop(cfg, dry_run=False, yes=True) == 0
+    capsys.readouterr()
+    # Everything is already invisible -> nothing left to organize.
+    assert organize_desktop(cfg, dry_run=False, yes=True) == 0
+    assert "no se encontraron" in capsys.readouterr().out.lower()
+
+
+def test_apply_real_lnk_sets_icon_and_restore_recovers(world):
+    import win32com.client
+
+    desktop, cfg = world
+    lnk = desktop / "Chrome.lnk"
+    shell = win32com.client.Dispatch("WScript.Shell")
+    shortcut = shell.CreateShortcut(str(lnk))
+    shortcut.TargetPath = r"C:\Windows\System32\notepad.exe"
+    shortcut.Arguments = "--profile A"
+    shortcut.WorkingDirectory = r"C:\Windows"
+    shortcut.Save()
+
+    assert apply_theme(cfg, yes=True, rename=False, cleanup=False) == 0
+    assert "Icons" in shell.CreateShortcut(str(lnk)).IconLocation
+
+    backups = glob.glob(str(desktop.parent / "appdata" / "Icons_Engine" / "backups" / "Test_Key" / "*"))
+    assert backups
+    assert restore_backup(backups[0], dry_run=False) == 0
+    # The original .lnk (no custom icon) is restored.
+    assert "Icons" not in shell.CreateShortcut(str(lnk)).IconLocation
+

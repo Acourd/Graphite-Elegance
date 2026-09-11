@@ -93,6 +93,8 @@ def _com():
 
 
 def _notify_file(path):
+    if sys.platform != "win32":
+        return
     import ctypes
     ctypes.windll.shell32.SHChangeNotify(
         0x00002000, 0x0001 | 0x1000,
@@ -101,6 +103,8 @@ def _notify_file(path):
 
 
 def _notify_shell():
+    if sys.platform != "win32":
+        return
     import ctypes
     ctypes.windll.shell32.SHChangeNotify(0x08000000, 0x0000, None, None)
 
@@ -254,21 +258,37 @@ def index_icons(icons_dir, allow_duplicates=False):
 # ---------------------------------------------------------------------------
 # Shortcut identity / resolution
 # ---------------------------------------------------------------------------
-def _key_from_icon_path(raw):
+def _split_icon_ref(raw):
+    """Split an IconLocation/IconFile value into (path, index).
+
+    Commas inside the path are preserved; only a trailing ',<int>' is the index.
+    """
     if not raw:
+        return None, None
+    text = raw.strip()
+    quoted = re.match(r'^"(?P<path>.*)"\s*,\s*(?P<index>-?\d+)$', text)
+    if quoted:
+        return quoted.group("path"), int(quoted.group("index"))
+    plain = re.match(r"^(?P<path>.*),(?P<index>-?\d+)$", text)
+    if plain:
+        return plain.group("path"), int(plain.group("index"))
+    only_quoted = re.match(r'^"(?P<path>.*)"$', text)
+    if only_quoted:
+        return only_quoted.group("path"), None
+    return text, None
+
+
+def _key_from_icon_path(raw):
+    path, _index = _split_icon_ref(raw)
+    if not path or not path.lower().endswith(".ico"):
         return None
-    candidate = raw.split(",")[0].strip().strip('"')
-    if not candidate.lower().endswith(".ico"):
-        return None
-    return os.path.splitext(os.path.basename(candidate))[0].lower()
+    return os.path.splitext(os.path.basename(path))[0].lower()
 
 
 def _icon_file_from_raw(raw):
-    """Path part of an IconLocation/IconFile value (before the index)."""
-    if not raw:
-        return None
-    candidate = raw.split(",", 1)[0].strip().strip('"')
-    return candidate or None
+    """Path part of an IconLocation/IconFile value (index stripped)."""
+    path, _index = _split_icon_ref(raw)
+    return path or None
 
 
 def _lookup(key, available):
@@ -284,11 +304,12 @@ def shortcut_identity(shell, path):
     if ext == ".lnk":
         try:
             sc = shell.CreateShortcut(path)
-            target = (sc.TargetPath or "").replace("/", "\\").strip().lower()
+            target = os.path.normcase((sc.TargetPath or "").replace("/", "\\").strip())
             if not target:
                 return None
-            args = (getattr(sc, "Arguments", "") or "").strip().lower()
-            wd = (getattr(sc, "WorkingDirectory", "") or "").replace("/", "\\").strip().lower()
+            # Windows paths are case-insensitive (normcase); arguments are not.
+            args = (getattr(sc, "Arguments", "") or "").strip()
+            wd = os.path.normcase((getattr(sc, "WorkingDirectory", "") or "").replace("/", "\\").strip())
             return f"lnk|{target}|{args}|{wd}"
         except Exception:
             return None
@@ -296,9 +317,9 @@ def shortcut_identity(shell, path):
         try:
             for line in _read_url(path)[0]:
                 if line.lower().startswith("url="):
-                    url_val = line.split("=", 1)[1].strip().lower()
-                    if url_val.startswith("steam://rungameid/"):
-                        appid = "".join(c for c in url_val.split("steam://rungameid/")[1] if c.isdigit())
+                    url_val = line.split("=", 1)[1].strip()
+                    if url_val.lower().startswith("steam://rungameid/"):
+                        appid = "".join(c for c in url_val.lower().split("steam://rungameid/")[1] if c.isdigit())
                         return f"url|steam:{appid}"
                     return f"url|{url_val}"
         except OSError:
@@ -486,35 +507,40 @@ def restore_backup(backup_dir, dry_run=False):
         data = json.load(fh)
     entries = validate_manifest(data, backup_dir)
 
-    win32com, pythoncom = _com()
-    pythoncom.CoInitialize()
-    restored = 0
+    # Pre-validate every file so a restore can never be partial.
+    resolved = []
     for entry in entries:
-        op = entry["op"]
-        path = entry["path"]
         backup_file = _safe_backup_file(backup_dir, entry["backup"])
         if not os.path.isfile(backup_file):
             raise BackupError(f"Falta el archivo de backup: {backup_file}")
-        if dry_run:
-            print(f"  [DRY] restauraría {op}: {path}")
-            continue
+        resolved.append((entry, backup_file))
+
+    if dry_run:
+        for entry, _backup in resolved:
+            print(f"  [DRY] restauraría {entry['op']}: {entry['path']}")
+        return 0
+
+    restored = 0
+    failures = 0
+    for entry, backup_file in resolved:
         try:
-            if op == "rename":
+            if entry["op"] == "rename":
                 new_path = entry["new_path"]
                 if os.path.exists(new_path):
                     os.remove(new_path)
                     _notify_file(new_path)
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            shutil.copy2(backup_file, path)
-            _notify_file(path)
+            os.makedirs(os.path.dirname(entry["path"]), exist_ok=True)
+            shutil.copy2(backup_file, entry["path"])
+            _notify_file(entry["path"])
             restored += 1
         except OSError as exc:
-            print(f"  [WARN] no se pudo restaurar {path}: {exc}")
-    pythoncom.CoUninitialize()
-    if not dry_run:
-        _notify_shell()
+            failures += 1
+            print(f"  [WARN] no se pudo restaurar {entry['path']}: {exc}")
+    _notify_shell()
     print(f"\nRestaurados {restored} elementos desde {backup_dir}.")
-    return 0
+    if failures:
+        print(f"Fallos: {failures}")
+    return 1 if failures else 0
 
 
 # ---------------------------------------------------------------------------
@@ -529,28 +555,41 @@ def _publish_icons(cfg):
     dest = _published_icons_dir(cfg)
     os.makedirs(os.path.dirname(dest), exist_ok=True)
     staging = f"{dest}.staging-{uuid.uuid4().hex[:8]}"
+    previous = f"{dest}.previous"
+
     try:
-        shutil.copytree(src, staging)          # build staging first
-        if os.path.exists(dest):               # replace only after a full copy
-            shutil.rmtree(dest)
-        os.rename(staging, dest)
-        print(f"  [INFO] Iconos publicados en: {dest}")
-        return dest
+        shutil.copytree(src, staging)          # build staging first (dest untouched)
     except OSError as exc:
-        if os.path.exists(staging):
-            shutil.rmtree(staging, ignore_errors=True)
+        shutil.rmtree(staging, ignore_errors=True)
         print(f"  [WARN] No se pudo publicar ({exc}). Se usarán los iconos locales.")
         return src
+
+    moved_previous = False
+    try:
+        if os.path.exists(previous):
+            shutil.rmtree(previous, ignore_errors=True)
+        if os.path.exists(dest):
+            os.rename(dest, previous)          # keep the previous tree for recovery
+            moved_previous = True
+        os.rename(staging, dest)               # atomic-ish swap
+    except OSError as exc:
+        if moved_previous and not os.path.exists(dest) and os.path.exists(previous):
+            os.rename(previous, dest)          # roll back so nothing is lost
+        shutil.rmtree(staging, ignore_errors=True)
+        print(f"  [WARN] No se pudo publicar ({exc}). Se usarán los iconos locales.")
+        return src
+    print(f"  [INFO] Iconos publicados en: {dest}")
+    return dest
 
 
 # ---------------------------------------------------------------------------
 # Planning
 # ---------------------------------------------------------------------------
-def plan_apply(cfg, available, shell, cleanup=False, rename=False):
+def plan_apply(cfg, available, shell, target_dir, cleanup=False, rename=False):
     """Return (dup_deletions, changes, renames, unmatched).
 
-    ``changes`` are the shortcuts that need an icon update; ``renames`` is a
-    list of {path, new_path} limited to shortcuts matched to this theme.
+    ``target_dir`` is the published icon directory the shortcuts should point to;
+    the comparison uses it so re-applying an already-published theme is a no-op.
     """
     dup_deletions = []
     if cleanup:
@@ -583,7 +622,7 @@ def plan_apply(cfg, available, shell, cleanup=False, rename=False):
                     sc = shell.CreateShortcut(path)
                     icon_path = _resolve_lnk(sc, path, available)
                     label = os.path.splitext(os.path.basename(sc.TargetPath or path))[0]
-                    changed = bool(icon_path) and sc.IconLocation != f"{icon_path}, 0"
+                    current = sc.IconLocation
                 else:
                     lines = _read_url_lines(path)
                     icon_path = _resolve_url(lines, path, available)
@@ -591,15 +630,18 @@ def plan_apply(cfg, available, shell, cleanup=False, rename=False):
                                  os.path.basename(path))
                     current = next((ln.split("=", 1)[1].strip()
                                     for ln in lines if ln.lower().startswith("iconfile=")), None)
-                    changed = bool(icon_path) and current != icon_path
             except Exception as exc:
                 print(f"  [FAIL] {os.path.basename(path)}: {exc}")
                 continue
-            if icon_path:
-                matched.append({"path": path, "ext": ext, "icon_path": icon_path,
-                                "label": label, "changed": changed})
-            else:
+            if not icon_path:
                 unmatched.append(label)
+                continue
+            rel = os.path.relpath(icon_path, cfg["icons_path"])
+            target_path = os.path.join(target_dir, rel)
+            desired = f"{target_path}, 0" if ext == ".lnk" else target_path
+            matched.append({"path": path, "ext": ext, "icon_path": icon_path,
+                            "icon_rel": rel, "target_path": target_path,
+                            "label": label, "changed": current != desired})
 
     changes = [m for m in matched if m["changed"]]
     renames = []
@@ -635,16 +677,14 @@ def apply_theme(cfg, dry_run=False, cleanup=False, rename=False, yes=False,
     pythoncom.CoInitialize()
     shell = win32com.client.Dispatch("WScript.Shell")
     dup_deletions, changes, renames, unmatched = plan_apply(
-        cfg, available, shell, cleanup=cleanup, rename=rename)
-    for c in changes:
-        c["icon_rel"] = os.path.relpath(c["icon_path"], cfg["icons_path"])
+        cfg, available, shell, _published_icons_dir(cfg), cleanup=cleanup, rename=rename)
 
     print(f"\nPlan: {len(changes)} iconos · {len(dup_deletions)} duplicados a borrar"
           f" · {len(renames)} renombrados · limpieza={'sí' if cleanup else 'no'}"
           f" · renombrado={'sí' if rename else 'no'}")
     if dry_run:
         for c in changes:
-            print(f"  [DRY] {c['label']} -> {os.path.basename(c['icon_path'])}")
+            print(f"  [DRY] {c['label']} -> {os.path.basename(c['target_path'])}")
         for p in dup_deletions:
             print(f"  [DRY] eliminaría duplicado: {os.path.basename(p)}")
         for r in renames:
@@ -686,12 +726,14 @@ def apply_theme(cfg, dry_run=False, cleanup=False, rename=False, yes=False,
     backup_dir = create_backup(cfg, list(by_path.values()))
 
     # --- Execute ----------------------------------------------------------
+    failures = 0
     for p in dup_deletions:
         try:
             os.remove(p)
             _notify_file(p)
             print(f"  [CLEANUP] duplicado visible eliminado: {os.path.basename(p)}")
         except OSError as exc:
+            failures += 1
             print(f"  [WARN] no se pudo eliminar {os.path.basename(p)}: {exc}")
 
     applied = 0
@@ -722,6 +764,7 @@ def apply_theme(cfg, dry_run=False, cleanup=False, rename=False, yes=False,
             applied += 1
             print(f"  [OK] {c['label']}  ->  {os.path.basename(c['icon_path'])}")
         except Exception as exc:
+            failures += 1
             print(f"  [FAIL] {os.path.basename(c['path'])}: {exc}")
 
     renamed = 0
@@ -733,16 +776,18 @@ def apply_theme(cfg, dry_run=False, cleanup=False, rename=False, yes=False,
             renamed += 1
             print(f"  [RENAME] {os.path.basename(r['path'])} -> (invisible)")
         except OSError as exc:
+            failures += 1
             print(f"  [WARN] no se pudo renombrar {os.path.basename(r['path'])}: {exc}")
 
     shell = None
     pythoncom.CoUninitialize()
     _notify_shell()
     print(f"\n¡Listo! Aplicados: {applied} | Eliminados: {len(dup_deletions)}"
-          f" | Renombrados: {renamed} | Sin coincidencia: {len(unmatched)}")
+          f" | Renombrados: {renamed} | Sin coincidencia: {len(unmatched)}"
+          f" | Fallos: {failures}")
     print(f"Backup: {backup_dir}")
     print("Si los iconos no se actualizaron, presiona F5 en el escritorio.")
-    return 0
+    return 1 if failures else 0
 
 
 # ---------------------------------------------------------------------------
@@ -778,6 +823,8 @@ def organize_desktop(cfg, dry_run=False, yes=False):
             # Only organize shortcuts whose icon lives in this theme's tree.
             if not icon_file or not is_within(icon_file, allowed):
                 continue
+            if is_invisible_name(os.path.splitext(os.path.basename(path))[0]):
+                continue  # already organized -> keep re-runs idempotent
             items.append({"path": path, "desktop": desktop, "ext": ext,
                           "key": key.replace(" ", "").lower()})
 
@@ -813,14 +860,16 @@ def organize_desktop(cfg, dry_run=False, yes=False):
 
     backup_dir = create_backup(cfg, [{"op": "rename", "path": it["path"],
                                       "new_path": it["new_path"]} for it in items])
+    failures = 0
     temp = []
-    for idx, it in enumerate(items):
-        tmp = os.path.join(it["desktop"], f"__iso_tmp_{idx}_{it['key']}{it['ext']}")
+    for it in items:
+        tmp = os.path.join(it["desktop"], f"__iso_tmp_{uuid.uuid4().hex}{it['ext']}")
         try:
             os.rename(it["path"], tmp)
             it["temp_path"] = tmp
             temp.append(it)
         except OSError as exc:
+            failures += 1
             print(f"  [ERROR] {os.path.basename(it['path'])}: {exc}")
 
     for it in temp:
@@ -830,14 +879,17 @@ def organize_desktop(cfg, dry_run=False, yes=False):
             _notify_file(it["new_path"])
             print(f"  {it['key']} -> (invisible)")
         except OSError as exc:
+            failures += 1
             print(f"  [ERROR] {it['key']}: {exc}")
 
     shell = None
     pythoncom.CoUninitialize()
     _notify_shell()
     print(f"\n¡Listo! Backup: {backup_dir}")
+    if failures:
+        print(f"Fallos: {failures}")
     print("Ahora: clic derecho en el escritorio -> 'Ordenar por' -> 'Nombre'.")
-    return 0
+    return 1 if failures else 0
 
 
 # ---------------------------------------------------------------------------

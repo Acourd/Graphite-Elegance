@@ -42,3 +42,32 @@ def test_publish_failure_keeps_existing_destination(tmp_path, monkeypatch):
     assert os.path.isfile(sentinel)
     assert returned == cfg["icons_path"]
     assert not any(".staging-" in n for n in os.listdir(os.path.dirname(dest)))
+
+
+def test_publish_swap_failure_rolls_back(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "appdata"))
+    src = _theme_dir(tmp_path)
+    cfg = {"persist_key": "T_Key", "icons_path": str(src)}
+
+    dest = _published_icons_dir(cfg)
+    os.makedirs(dest)
+    sentinel = os.path.join(dest, "OLD.ico")
+    with open(sentinel, "wb") as fh:
+        fh.write(b"old")
+
+    real_rename = os.rename
+    state = {"failed": False}
+
+    def flaky(source, target, *args, **kwargs):
+        if not state["failed"] and os.path.basename(source).startswith("Icons.staging-"):
+            state["failed"] = True
+            raise OSError("swap locked")
+        return real_rename(source, target, *args, **kwargs)
+
+    monkeypatch.setattr(os, "rename", flaky)
+    returned = _publish_icons(cfg)
+
+    # The failed swap must roll the previous tree back, not lose it.
+    assert os.path.isfile(sentinel)
+    assert returned == cfg["icons_path"]
+    assert not any(".staging-" in n for n in os.listdir(os.path.dirname(dest)))

@@ -1,4 +1,4 @@
-from icon_engine import _icon_file_from_raw, _read_url, shortcut_identity
+from icon_engine import _icon_file_from_raw, _key_from_icon_path, _read_url, shortcut_identity
 
 
 class FakeShortcut:
@@ -29,12 +29,20 @@ def test_lnk_identity_includes_args_and_cwd():
     assert ident_a != shortcut_identity(shell, "c.lnk")   # different cwd
 
 
-def test_lnk_identity_case_insensitive():
-    shell = FakeShell({
-        "a.lnk": FakeShortcut(r"C:\Games\Game.EXE", "--Profile A", r"C:\A"),
-        "b.lnk": FakeShortcut(r"c:\games\game.exe", "--profile a", r"c:\a"),
+def test_lnk_identity_path_case_insensitive_but_args_case_sensitive():
+    same = FakeShell({
+        "a.lnk": FakeShortcut(r"C:\Games\Game.EXE", "--profile A", r"C:\A"),
+        "b.lnk": FakeShortcut(r"c:\games\game.exe", "--profile A", r"c:\a"),
     })
-    assert shortcut_identity(shell, "a.lnk") == shortcut_identity(shell, "b.lnk")
+    # Windows paths are case-insensitive -> identical.
+    assert shortcut_identity(same, "a.lnk") == shortcut_identity(same, "b.lnk")
+
+    diff = FakeShell({
+        "a.lnk": FakeShortcut(r"C:\Games\game.exe", "--Profile A", r"C:\A"),
+        "b.lnk": FakeShortcut(r"C:\Games\game.exe", "--profile a", r"C:\A"),
+    })
+    # Arguments are case-sensitive -> must not be conflated.
+    assert shortcut_identity(diff, "a.lnk") != shortcut_identity(diff, "b.lnk")
 
 
 def test_url_identity_steam_normalized(tmp_path):
@@ -79,3 +87,18 @@ def test_icon_file_from_raw():
     assert _icon_file_from_raw(r'"C:\a\Chrome.ico",0') == r"C:\a\Chrome.ico"
     assert _icon_file_from_raw("") is None
     assert _icon_file_from_raw(None) is None
+
+
+def test_icon_ref_with_comma_in_path():
+    # The index is only the trailing ',<int>'; commas inside the path stay.
+    assert _icon_file_from_raw(r"C:\a,b\Chrome.ico,0") == r"C:\a,b\Chrome.ico"
+    assert _key_from_icon_path(r"C:\a,b\Chrome.ico,0") == "chrome"
+    assert _icon_file_from_raw(r"C:\a,b\Chrome.ico") == r"C:\a,b\Chrome.ico"
+
+
+def test_url_identity_case_sensitive(tmp_path):
+    f1 = tmp_path / "a.url"
+    f1.write_text("[InternetShortcut]\nURL=https://example.com/Case\n", encoding="utf-8")
+    f2 = tmp_path / "b.url"
+    f2.write_text("[InternetShortcut]\nURL=https://example.com/case\n", encoding="utf-8")
+    assert shortcut_identity(None, str(f1)) != shortcut_identity(None, str(f2))

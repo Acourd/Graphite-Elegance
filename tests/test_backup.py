@@ -11,6 +11,7 @@ from icon_engine import (
     create_backup,
     desktop_dirs,
     is_within,
+    restore_backup,
     validate_manifest,
 )
 
@@ -121,3 +122,37 @@ def test_backups_are_unique_within_same_second(tmp_path, monkeypatch):
     assert first != second
     assert os.path.isfile(os.path.join(first, "manifest.json"))
     assert os.path.isfile(os.path.join(second, "manifest.json"))
+
+
+# --- regression: restore must pre-validate and must not need pywin32 --------
+def test_restore_prevalidates_all_backup_files(tmp_path, monkeypatch):
+    desktop = _desktop(tmp_path, monkeypatch)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "appdata"))
+    victim = desktop / "a.lnk"
+    victim.write_bytes(b"original")
+    backup = create_backup({"persist_key": "T_Key"}, [{"op": "modify", "path": str(victim)}])
+    # Corrupt the backup: remove the copied file so the manifest points nowhere.
+    for copied in (tmp_path / "appdata").rglob("0000_a.lnk"):
+        copied.unlink()
+
+    with pytest.raises(BackupError):
+        restore_backup(backup, dry_run=False)
+    assert victim.read_bytes() == b"original"  # nothing was half-restored
+
+
+def test_restore_does_not_require_pywin32(tmp_path, monkeypatch):
+    import icon_engine
+
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "appdata"))
+    desktop = _desktop(tmp_path, monkeypatch)
+    victim = desktop / "a.lnk"
+    victim.write_bytes(b"original")
+    backup = create_backup({"persist_key": "T_Key"}, [{"op": "modify", "path": str(victim)}])
+    victim.write_bytes(b"changed")
+
+    def no_com():
+        raise icon_engine.DependencyError("pywin32 no disponible")
+
+    monkeypatch.setattr(icon_engine, "_com", no_com)
+    assert restore_backup(backup, dry_run=False) == 0
+    assert victim.read_bytes() == b"original"
