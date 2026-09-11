@@ -1,5 +1,6 @@
 import json
 import os
+import time
 
 import pytest
 
@@ -188,3 +189,45 @@ def test_restore_is_all_or_nothing_on_copy_failure(tmp_path, monkeypatch):
     # Staging fails before any destination is replaced.
     assert first.read_bytes() == b"A1"
     assert second.read_bytes() == b"B1"
+
+
+# --- regression: orphan sweep must be strict, scoped and age-limited --------
+def test_orphan_sweep_is_strict_and_age_limited(tmp_path, monkeypatch):
+    import icon_engine
+
+    desktop = _desktop(tmp_path, monkeypatch)
+    outside = tmp_path / "Elsewhere"
+    outside.mkdir()
+
+    stale = desktop / "Chrome.url.isoform-restore-deadbeef"
+    recent = desktop / "Chrome.url.isoform-restore-00000001"
+    wrong_name = desktop / "notes.txt"
+    outside_stale = outside / "Other.url.isoform-restore-deadbeef"
+    for path in (stale, recent, wrong_name, outside_stale):
+        path.write_bytes(b"x")
+    old = time.time() - 3600
+    os.utime(stale, (old, old))
+    os.utime(outside_stale, (old, old))
+
+    assert icon_engine.sweep_restore_orphans() == 1
+    assert not stale.exists()          # stale orphan removed
+    assert recent.exists()             # recent temp kept (active restore safety)
+    assert wrong_name.exists()         # non-matching name kept
+    assert outside_stale.exists()      # outside the Desktop roots: untouched
+
+
+def test_restore_sweeps_stale_orphans(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "appdata"))
+    desktop = _desktop(tmp_path, monkeypatch)
+    victim = desktop / "a.lnk"
+    victim.write_bytes(b"original")
+    backup = create_backup({"persist_key": "T_Key"}, [{"op": "modify", "path": str(victim)}])
+
+    orphan = desktop / "old.lnk.isoform-restore-cafebabe"
+    orphan.write_bytes(b"stale")
+    old = time.time() - 3600
+    os.utime(orphan, (old, old))
+
+    assert restore_backup(backup, dry_run=False) == 0
+    assert not orphan.exists()
+    assert victim.read_bytes() == b"original"

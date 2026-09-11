@@ -505,6 +505,44 @@ def validate_manifest(data, backup_dir):
     return entries
 
 
+_RESTORE_ORPHAN_RE = re.compile(r"\.isoform-restore-[0-9a-fA-F]{8}$")
+RESTORE_ORPHAN_MIN_AGE = 300  # seconds; never touch a likely-active restore
+
+
+def sweep_restore_orphans(min_age=RESTORE_ORPHAN_MIN_AGE):
+    """Best-effort removal of stale restore temp files.
+
+    Strictly limited to ``<name>.isoform-restore-<8 hex>`` that are *direct*
+    children of an allowed Desktop root, and only when older than ``min_age``
+    seconds, so an active restore is never disturbed. Returns the count removed.
+    """
+    removed = 0
+    now = time.time()
+    for desktop in desktop_dirs():
+        if not os.path.isdir(desktop):
+            continue
+        try:
+            entries = os.listdir(desktop)
+        except OSError:
+            continue
+        for name in entries:
+            if not _RESTORE_ORPHAN_RE.search(name):
+                continue
+            path = os.path.join(desktop, name)
+            if not os.path.isfile(path):
+                continue
+            try:
+                if now - os.path.getmtime(path) < min_age:
+                    continue
+                os.remove(path)
+                removed += 1
+            except OSError:
+                continue
+    if removed:
+        print(f"  [INFO] Limpiados {removed} temporales de restauración huérfanos.")
+    return removed
+
+
 def restore_backup(backup_dir, dry_run=False):
     manifest_path = os.path.join(backup_dir, "manifest.json")
     if not os.path.isfile(manifest_path):
@@ -525,6 +563,9 @@ def restore_backup(backup_dir, dry_run=False):
         for entry, _backup in resolved:
             print(f"  [DRY] restauraría {entry['op']}: {entry['path']}")
         return 0
+
+    # Clear stale temporaries from a previous interrupted restore before staging.
+    sweep_restore_orphans()
 
     # Phase 1: stage every restore next to its destination (all-or-nothing).
     # If any copy fails, nothing has been replaced yet.
