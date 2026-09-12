@@ -204,6 +204,33 @@ def test_read_ico_sizes_rejects_invalid_ihdr_combo(tmp_path):
     assert "IHDR" in err
 
 
+def test_read_ico_sizes_rejects_chunks_after_iend(tmp_path):
+    raw = b"\x00" * (256 * (1 + 256 * 4))
+    payload = (b"\x89PNG\r\n\x1a\n"
+               + _png_chunk(b"IHDR", struct.pack(">IIBBBBB", 256, 256, 8, 6, 0, 0, 0))
+               + _png_chunk(b"IDAT", zlib.compress(raw))
+               + _png_chunk(b"IEND", b"")
+               + _png_chunk(b"tEXt", b"x"))
+    p = tmp_path / "after_iend.ico"
+    p.write_bytes(_single_frame_ico(payload))
+    sizes, err = read_ico_sizes(str(p))
+    assert sizes == [256] and err is not None
+    assert "IEND" in err
+
+
+def test_read_ico_sizes_rejects_duplicate_ihdr(tmp_path):
+    raw = b"\x00" * (256 * (1 + 256 * 4))
+    ihdr = _png_chunk(b"IHDR", struct.pack(">IIBBBBB", 256, 256, 8, 6, 0, 0, 0))
+    payload = (b"\x89PNG\r\n\x1a\n" + ihdr + ihdr
+               + _png_chunk(b"IDAT", zlib.compress(raw))
+               + _png_chunk(b"IEND", b""))
+    p = tmp_path / "dup_ihdr.ico"
+    p.write_bytes(_single_frame_ico(payload))
+    sizes, err = read_ico_sizes(str(p))
+    assert sizes == [256] and err is not None
+    assert "IHDR" in err
+
+
 # --- regression: relpath across Windows drives (C: repo vs D: tmp) ---------
 def test_rel_falls_back_to_absolute_across_drives(monkeypatch):
     import icon_validate

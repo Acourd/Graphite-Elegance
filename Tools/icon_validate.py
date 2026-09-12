@@ -43,6 +43,7 @@ from icon_engine import (  # noqa: E402, I001
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SKIP_DIRS = {".git", "Tools", "tests", "node_modules", ".github"}
+_PNG_SIG = b"\x89PNG\r\n\x1a\n"
 
 
 def _rel(path, start):
@@ -55,43 +56,63 @@ def _rel(path, start):
 
 # ---------------------------------------------------------------------------
 def _png_errors(payload, w, h):
-    """Deep PNG check: chunks, CRC, IHDR/PLTE and full filter reconstruction."""
     errors = []
-    if not payload.startswith(b"\x89PNG\r\n\x1a\n"):
+    if not payload.startswith(_PNG_SIG):
         return ["no es PNG"]
     pos = 8
     idat = b""
     header = None
     seen_iend = False
     has_palette = False
+    seen_idat = False
+    index = 0
+    order_error = False
     while pos + 8 <= len(payload):
         length, ctype = struct.unpack_from(">I4s", payload, pos)
         pos += 8
         if pos + length + 4 > len(payload):
             errors.append("chunk PNG truncado")
             return errors
+        if seen_iend:
+            errors.append("chunk PNG después de IEND")
+            order_error = True
+            break
         body = payload[pos:pos + length]
         crc = struct.unpack_from(">I", payload, pos + length)[0]
         if zlib.crc32(ctype + body) & 0xffffffff != crc:
             errors.append(f"CRC inválido en {ctype.decode('latin1', 'replace')}")
         if ctype == b"IHDR":
-            if length != 13:
-                errors.append("IHDR inválido")
-                return errors
+            if index != 0 or header is not None or length != 13:
+                errors.append("IHDR duplicado, fuera de orden o inválido")
+                order_error = True
+                break
             header = struct.unpack(">IIBBBBB", body)
         elif ctype == b"PLTE":
+            if header is None or seen_idat or has_palette:
+                errors.append("PLTE fuera de orden o duplicado")
+                order_error = True
             has_palette = True
         elif ctype == b"IDAT":
+            if header is None:
+                errors.append("IDAT antes de IHDR")
+                order_error = True
             idat += body
+            seen_idat = True
         elif ctype == b"IEND":
+            if not seen_idat:
+                errors.append("IEND antes de IDAT")
+                order_error = True
             seen_iend = True
         pos += length + 4
+        index += 1
     if header is None:
         return errors + ["sin IHDR"]
     if not seen_iend:
         errors.append("sin IEND")
     if not idat:
         errors.append("sin IDAT")
+    if order_error:
+        return errors
     pw, ph, depth, color, comp, filt, interlace = header
     if (pw, ph) != (w, h):
         errors.append(f"dimensiones PNG {pw}x{ph} != {w}x{h}")
