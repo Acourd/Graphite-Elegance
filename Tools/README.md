@@ -53,8 +53,9 @@ Exit codes: `0` ok · `1` runtime/dependency error · `2` configuration error.
   already restored is rolled back.
 - **Published icons are re-synced.** Every run compares the source icon tree
   with `%LOCALAPPDATA%\Icons_Engine\Themes\<key>\Icons` and republishes when
-  assets are missing or changed, even if no shortcut needs an update (a
-  damaged publication is repaired without touching shortcuts or backups).
+  assets are missing, changed or obsolete, even if no shortcut needs an update
+  (a damaged or stale publication is repaired without touching shortcuts or
+  backups).
 - **Idempotent re-apply.** The stored icon index is parsed when comparing, so a
   second run over an already-applied theme reports nothing to do.
 - **Theme-scoped rename/organize.** `--rename` only renames shortcuts matched to
@@ -81,9 +82,11 @@ Exit codes: `0` ok · `1` runtime/dependency error · `2` configuration error.
 
 Each `entries[]` item is `{op, path, backup, sha256}` (+ `new_path` and, after a
 successful rename, `post_sha256` for `op:"rename"`), where `op` is `modify`,
-`delete` or `rename`. Restoring copies `files/<backup>` back to `path`; for
-renames it removes `new_path` first, but only after verifying that file still
-matches the recorded hash.
+`delete` or `rename`. Manifests are schema 2 and every entry requires its
+SHA-256. Restoring copies `files/<backup>` back to `path`; for renames it
+removes `new_path` first, but only after verifying that file still matches the
+recorded hash, and it verifies the restored bytes afterwards — any mismatch is
+rolled back.
 
 ## `theme.json`
 

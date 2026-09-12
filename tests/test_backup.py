@@ -45,13 +45,26 @@ def test_validate_manifest_ok(tmp_path, monkeypatch):
     desktop = _desktop(tmp_path, monkeypatch)
     (tmp_path / "files").mkdir()
     (tmp_path / "files" / "0000_a.lnk").write_bytes(b"x")
-    data = {"schema": 1, "entries": [
-        {"op": "modify", "path": str(desktop / "a.lnk"), "backup": "0000_a.lnk"},
+    digest = "0" * 64
+    data = {"schema": 2, "entries": [
+        {"op": "modify", "path": str(desktop / "a.lnk"), "backup": "0000_a.lnk",
+         "sha256": digest},
         {"op": "rename", "path": str(desktop / "b.lnk"),
-         "new_path": str(desktop / "\u00a0.lnk"), "backup": "0000_a.lnk"},
+         "new_path": str(desktop / "\u00a0.lnk"), "backup": "0000_a.lnk",
+         "sha256": digest},
     ]}
     entries = validate_manifest(data, str(tmp_path))
     assert len(entries) == 2
+
+
+def test_validate_manifest_rejects_missing_hashes(tmp_path, monkeypatch):
+    desktop = _desktop(tmp_path, monkeypatch)
+    (tmp_path / "files").mkdir()
+    data = {"schema": 2, "entries": [
+        {"op": "modify", "path": str(desktop / "a.lnk"), "backup": "0000_a.lnk"},
+    ]}
+    with pytest.raises(BackupError):
+        validate_manifest(data, str(tmp_path))
 
 
 def test_validate_manifest_rejects_outside_path(tmp_path, monkeypatch):
@@ -82,8 +95,9 @@ def test_create_backup_copies_files(tmp_path, monkeypatch):
     create_backup(cfg, [{"op": "delete", "path": str(victim)}])
     manifest = json.loads((tmp_path / "appdata" / "Icons_Engine" / "backups" / "T_Key"
                            ).glob("*/manifest.json").__next__().read_text(encoding="utf-8"))
-    assert manifest["schema"] == 1
+    assert manifest["schema"] == 2
     assert manifest["entries"][0]["op"] == "delete"
+    assert len(manifest["entries"][0]["sha256"]) == 64
     copied = list((tmp_path / "appdata").rglob("0000_old.lnk"))
     assert copied and copied[0].read_bytes() == b"original"
 
@@ -236,6 +250,30 @@ def test_restore_rolls_back_when_a_later_replace_fails(tmp_path, monkeypatch):
     assert restore_backup(backup, dry_run=False) == 1
     assert first.read_bytes() == b"A1"
     assert second.read_bytes() == b"B1"
+    assert not list(desktop.glob("*.isoform-restore-*"))
+
+
+def test_restore_detects_corrupted_restored_bytes(tmp_path, monkeypatch):
+    import icon_engine
+
+    desktop = _desktop(tmp_path, monkeypatch)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "appdata"))
+    victim = desktop / "a.lnk"
+    victim.write_bytes(b"A0")
+    backup = create_backup({"persist_key": "T_Key"}, [{"op": "modify", "path": str(victim)}])
+    victim.write_bytes(b"A1")
+
+    real_copy2 = icon_engine.shutil.copy2
+
+    def corrupted(src, dst, *args, **kwargs):
+        real_copy2(src, dst, *args, **kwargs)
+        if os.path.basename(os.path.dirname(src)) == "files":
+            with open(dst, "ab") as fh:
+                fh.write(b"X")
+
+    monkeypatch.setattr(icon_engine.shutil, "copy2", corrupted)
+    assert restore_backup(backup, dry_run=False) == 1
+    assert victim.read_bytes() == b"A1"
     assert not list(desktop.glob("*.isoform-restore-*"))
 
 

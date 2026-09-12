@@ -75,14 +75,52 @@ def test_apply_repairs_published_tree_without_shortcut_changes(world):
     icon = os.path.join(published, "Chrome.ico")
     assert os.path.isfile(icon)
     os.remove(icon)
+    obsolete = os.path.join(published, "Obsolete.ico")
+    with open(obsolete, "wb") as fh:
+        fh.write(b"gone")
 
     backups_root = str(desktop.parent / "appdata" / "Icons_Engine" / "backups" / "Test_Key")
     before = set(glob.glob(os.path.join(backups_root, "*")))
 
     assert apply_theme(cfg, yes=True, rename=False, cleanup=False) == 0
     assert os.path.isfile(icon), "la publicación dañada debe repararse"
+    assert not os.path.exists(obsolete), "los iconos obsoletos deben retirarse"
     after = set(glob.glob(os.path.join(backups_root, "*")))
     assert after == before, "republicar no debe crear backups"
+
+
+def test_failed_rename_cannot_authorize_deleting_decoy(world, monkeypatch):
+    import icon_engine
+
+    desktop, cfg = world
+    (desktop / "Chrome.url").write_text(_url("Chrome", "https://example.com/"), encoding="utf-8")
+    stolen = {}
+
+    real_rename = os.rename
+
+    def flaky(src, dst, *args, **kwargs):
+        if os.path.basename(dst).startswith("\u00a0"):
+            with open(dst, "wb") as fh:
+                fh.write(b"foreign")
+            stolen["path"] = dst
+            raise FileExistsError("collision")
+        return real_rename(src, dst, *args, **kwargs)
+
+    monkeypatch.setattr(icon_engine.os, "rename", flaky)
+    assert apply_theme(cfg, yes=True, rename=True, cleanup=False) == 1
+    assert stolen.get("path") and os.path.isfile(stolen["path"])
+
+    backups = glob.glob(str(desktop.parent / "appdata" / "Icons_Engine" / "backups" / "Test_Key" / "*"))
+    assert backups
+    with open(os.path.join(backups[0], "manifest.json"), encoding="utf-8") as fh:
+        manifest = json.load(fh)
+    rename_entries = [e for e in manifest["entries"] if e["op"] == "rename"]
+    assert rename_entries
+    assert not any("post_sha256" in e for e in rename_entries)
+
+    assert restore_backup(backups[0], dry_run=False) == 1
+    with open(stolen["path"], "rb") as fh:
+        assert fh.read() == b"foreign"
 
 
 def test_rename_only_touches_theme_shortcuts(world):

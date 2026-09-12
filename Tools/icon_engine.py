@@ -46,7 +46,7 @@ INVISIBLE = "\u00a0"
 REQUIRED_ICO_SIZES = (16, 32, 48, 64, 128, 256)
 PERSIST_KEY_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 ALLOWED_CONFIG_KEYS = {"name", "persist_key", "icons_dir", "order"}
-BACKUP_SCHEMA = 1
+BACKUP_SCHEMA = 2
 
 DEFAULTS = {
     "name": "Isoform Theme",
@@ -508,8 +508,9 @@ def validate_manifest(data, backup_dir):
     """Validate schema and restrict every path to an allowed Desktop root."""
     if not isinstance(data, dict):
         raise BackupError("El manifiesto no es un objeto JSON")
-    if data.get("schema") != BACKUP_SCHEMA:
-        raise BackupError(f"Esquema de backup no soportado: {data.get('schema')!r}")
+    schema = data.get("schema")
+    if schema not in (1, BACKUP_SCHEMA):
+        raise BackupError(f"Esquema de backup no soportado: {schema!r}")
     entries = data.get("entries")
     if not isinstance(entries, list):
         raise BackupError("El manifiesto no tiene 'entries'")
@@ -525,9 +526,8 @@ def validate_manifest(data, backup_dir):
         if not isinstance(path, str) or not is_within(path, roots):
             raise BackupError(f"Ruta restaurable fuera del escritorio permitido: {path!r}")
         digest = entry.get("sha256")
-        if digest is not None and (not isinstance(digest, str)
-                                   or not re.fullmatch(r"[0-9a-f]{64}", digest)):
-            raise BackupError("Hash de backup inválido")
+        if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+            raise BackupError("Falta el hash SHA-256 de la entrada de backup")
         post = entry.get("post_sha256")
         if post is not None and (not isinstance(post, str)
                                  or not re.fullmatch(r"[0-9a-f]{64}", post)):
@@ -662,11 +662,11 @@ def restore_backup(backup_dir, dry_run=False):
             os.makedirs(os.path.dirname(target), exist_ok=True)
             temp = f"{target}.isoform-restore-{uuid.uuid4().hex[:8]}"
             shutil.copy2(backup_file, temp)
-            expected = (entry.get("post_sha256") or entry.get("sha256")
-                        or sha256_file(backup_file))
-            staged.append((entry, backup_file, expected, temp))
+            backup_hash = entry["sha256"]
+            expected_new = entry.get("post_sha256") or backup_hash
+            staged.append((entry, backup_hash, expected_new, temp))
     except OSError as exc:
-        for _entry, _backup, _expected, temp in staged:
+        for _entry, _hash, _expected, temp in staged:
             try:
                 os.remove(temp)
             except OSError:
@@ -678,12 +678,12 @@ def restore_backup(backup_dir, dry_run=False):
     restored = 0
     failures = 0
     applied = []
-    for index, (entry, _backup, expected, temp) in enumerate(staged):
+    for index, (entry, backup_hash, expected_new, temp) in enumerate(staged):
         try:
             if entry["op"] == "rename":
                 new_path = entry["new_path"]
                 if os.path.exists(new_path):
-                    if not _owns_backup_file(new_path, expected):
+                    if not _owns_backup_file(new_path, expected_new):
                         raise BackupError(
                             f"conflicto: {new_path} ya no es el acceso original; no se toca")
                     applied.append((new_path, _snapshot_file(new_path)))
@@ -691,12 +691,14 @@ def restore_backup(backup_dir, dry_run=False):
                     _notify_file(new_path)
             applied.append((entry["path"], _snapshot_file(entry["path"])))
             os.replace(temp, entry["path"])
+            if sha256_file(entry["path"]) != backup_hash:
+                raise BackupError("los bytes restaurados no coinciden con el backup")
             _notify_file(entry["path"])
             restored += 1
         except (OSError, BackupError) as exc:
             failures += 1
             print(f"  [WARN] no se pudo restaurar {entry['path']}: {exc}")
-            for _e, _b, _x, leftover in staged[index:]:
+            for _e, _h, _x, leftover in staged[index:]:
                 try:
                     os.remove(leftover)
                 except OSError:
@@ -768,12 +770,14 @@ def _publish_icons(cfg):
 def _tree_drift(src, dest):
     """Relative paths of icons missing from (or different in) the published tree."""
     drift = []
+    src_rel = set()
     for root, _dirs, files in os.walk(src):
         for fname in sorted(files):
             if not fname.lower().endswith(".ico"):
                 continue
             full = os.path.join(root, fname)
             rel = os.path.relpath(full, src)
+            src_rel.add(os.path.normcase(rel))
             other = os.path.join(dest, rel)
             if not os.path.isfile(other):
                 drift.append(rel)
@@ -782,6 +786,13 @@ def _tree_drift(src, dest):
                 if os.path.getsize(other) != os.path.getsize(full) or sha256_file(other) != sha256_file(full):
                     drift.append(rel)
             except OSError:
+                drift.append(rel)
+    for root, _dirs, files in os.walk(dest):
+        for fname in sorted(files):
+            if not fname.lower().endswith(".ico"):
+                continue
+            rel = os.path.relpath(os.path.join(root, fname), dest)
+            if os.path.normcase(rel) not in src_rel:
                 drift.append(rel)
     return drift
 
@@ -993,9 +1004,11 @@ def apply_theme(cfg, dry_run=False, cleanup=False, rename=False, yes=False,
             print(f"  [FAIL] {os.path.basename(c['path'])}: {exc}")
 
     renamed = 0
+    renamed_ok = []
     for r in renames:
         try:
             os.rename(r["path"], r["new_path"])
+            renamed_ok.append(r)
             _notify_file(r["path"])
             _notify_file(r["new_path"])
             renamed += 1
@@ -1004,8 +1017,8 @@ def apply_theme(cfg, dry_run=False, cleanup=False, rename=False, yes=False,
             failures += 1
             print(f"  [WARN] no se pudo renombrar {os.path.basename(r['path'])}: {exc}")
 
-    if renames:
-        record_post_hashes(backup_dir, renames)
+    if renamed_ok:
+        record_post_hashes(backup_dir, renamed_ok)
 
     shell = None
     pythoncom.CoUninitialize()

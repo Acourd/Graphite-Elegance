@@ -22,6 +22,15 @@ def test_tree_drift_detects_missing_and_changed(tmp_path):
     assert _tree_drift(str(src), str(dest)) == ["Chrome.ico"]
 
 
+def test_tree_drift_detects_obsolete_published_icons(tmp_path):
+    src = _theme_dir(tmp_path)
+    dest = tmp_path / "published"
+    dest.mkdir()
+    (dest / "Chrome.ico").write_bytes(b"new")
+    (dest / "Obsolete.ico").write_bytes(b"gone")
+    assert _tree_drift(str(src), str(dest)) == ["Obsolete.ico"]
+
+
 def test_publish_replaces_after_a_full_copy(tmp_path, monkeypatch):
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "appdata"))
     src = _theme_dir(tmp_path)
