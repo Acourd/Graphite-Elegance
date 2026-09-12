@@ -67,6 +67,17 @@ def test_validate_manifest_rejects_missing_hashes(tmp_path, monkeypatch):
         validate_manifest(data, str(tmp_path))
 
 
+def test_validate_manifest_rejects_legacy_schema(tmp_path, monkeypatch):
+    desktop = _desktop(tmp_path, monkeypatch)
+    (tmp_path / "files").mkdir()
+    data = {"schema": 1, "entries": [
+        {"op": "modify", "path": str(desktop / "a.lnk"), "backup": "0000_a.lnk",
+         "sha256": "0" * 64},
+    ]}
+    with pytest.raises(BackupError):
+        validate_manifest(data, str(tmp_path))
+
+
 def test_validate_manifest_rejects_outside_path(tmp_path, monkeypatch):
     _desktop(tmp_path, monkeypatch)
     (tmp_path / "files").mkdir()

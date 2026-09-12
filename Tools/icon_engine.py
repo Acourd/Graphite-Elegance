@@ -509,8 +509,10 @@ def validate_manifest(data, backup_dir):
     if not isinstance(data, dict):
         raise BackupError("El manifiesto no es un objeto JSON")
     schema = data.get("schema")
-    if schema not in (1, BACKUP_SCHEMA):
-        raise BackupError(f"Esquema de backup no soportado: {schema!r}")
+    if schema != BACKUP_SCHEMA:
+        raise BackupError(
+            f"Esquema de backup no soportado: {schema!r} "
+            f"(se requiere schema {BACKUP_SCHEMA} con hashes)")
     entries = data.get("entries")
     if not isinstance(entries, list):
         raise BackupError("El manifiesto no tiene 'entries'")
@@ -1125,6 +1127,7 @@ def organize_desktop(cfg, dry_run=False, yes=False):
     backup_dir = create_backup(cfg, [{"op": "rename", "path": it["path"],
                                       "new_path": it["new_path"]} for it in items])
     failures = 0
+    renamed_ok = []
     temp = []
     for it in items:
         tmp = os.path.join(it["desktop"], f"__iso_tmp_{uuid.uuid4().hex}{it['ext']}")
@@ -1139,12 +1142,16 @@ def organize_desktop(cfg, dry_run=False, yes=False):
     for it in temp:
         try:
             os.rename(it["temp_path"], it["new_path"])
+            renamed_ok.append({"path": it["path"], "new_path": it["new_path"]})
             _notify_file(it["temp_path"])
             _notify_file(it["new_path"])
             print(f"  {it['key']} -> (invisible)")
         except OSError as exc:
             failures += 1
             print(f"  [ERROR] {it['key']}: {exc}")
+
+    if renamed_ok:
+        record_post_hashes(backup_dir, renamed_ok)
 
     shell = None
     pythoncom.CoUninitialize()

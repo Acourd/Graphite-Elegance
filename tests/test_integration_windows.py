@@ -123,6 +123,21 @@ def test_failed_rename_cannot_authorize_deleting_decoy(world, monkeypatch):
         assert fh.read() == b"foreign"
 
 
+def test_organize_records_post_hash_for_restore(world):
+    desktop, cfg = world
+    (desktop / "Chrome.url").write_text(_url("Chrome", "https://example.com/"), encoding="utf-8")
+    assert apply_theme(cfg, yes=True, rename=False, cleanup=False) == 0
+    assert organize_desktop(cfg, yes=True) == 0
+    invisible = [f for f in os.listdir(desktop) if f.startswith("\u00a0")]
+    assert len(invisible) == 1
+
+    backups = glob.glob(str(desktop.parent / "appdata" / "Icons_Engine" / "backups" / "Test_Key" / "*"))
+    assert backups
+    assert restore_backup(sorted(backups)[-1], dry_run=False) == 0
+    assert (desktop / "Chrome.url").is_file()
+    assert not any(f.startswith("\u00a0") for f in os.listdir(desktop))
+
+
 def test_rename_only_touches_theme_shortcuts(world):
     desktop, cfg = world
     (desktop / "Chrome.url").write_text(_url("Chrome", "https://example.com/"), encoding="utf-8")

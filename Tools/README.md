@@ -85,7 +85,8 @@ successful rename, `post_sha256` for `op:"rename"`), where `op` is `modify`,
 `delete` or `rename`. Manifests are schema 2 and every entry requires its
 SHA-256. Preflight verifies every backup file against its hash before anything
 is touched; restoring copies `files/<backup>` back to `path`, re-hashes the
-restored bytes and rolls back on mismatch. A renamed `new_path` is removed only
+restored bytes and rolls back on mismatch. Schema 1 (legacy, hashless)
+manifests are rejected. A renamed `new_path` is removed only
 when its `post_sha256` (recorded by an approved, successful rename) exists and
 matches; otherwise the entry fails safe and the file is preserved.
 
