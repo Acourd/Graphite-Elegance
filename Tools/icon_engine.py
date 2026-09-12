@@ -594,8 +594,10 @@ def _restore_snapshot(path, snap):
         else:
             os.replace(snap, path)
         _notify_file(path)
+        return True
     except OSError as exc:
-        print(f"  [WARN] no se pudo revertir {path}: {exc}")
+        print(f"  [ERROR] no se pudo revertir {path}: {exc}")
+        return False
 
 
 def record_post_hashes(backup_dir, renames):
@@ -637,16 +639,19 @@ def restore_backup(backup_dir, dry_run=False):
         data = json.load(fh)
     entries = validate_manifest(data, backup_dir)
 
-    # Pre-validate every file so a restore can never be partial.
+    # Pre-validate every file (existence AND hash) before any mutation.
     resolved = []
     for entry in entries:
         backup_file = _safe_backup_file(backup_dir, entry["backup"])
         if not os.path.isfile(backup_file):
             raise BackupError(f"Falta el archivo de backup: {backup_file}")
-        resolved.append((entry, backup_file))
+        digest = sha256_file(backup_file)
+        if digest != entry["sha256"]:
+            raise BackupError(f"El archivo de backup {entry['backup']} no coincide con su hash")
+        resolved.append((entry, backup_file, digest))
 
     if dry_run:
-        for entry, _backup in resolved:
+        for entry, _backup, _digest in resolved:
             print(f"  [DRY] restauraría {entry['op']}: {entry['path']}")
         return 0
 
@@ -654,38 +659,51 @@ def restore_backup(backup_dir, dry_run=False):
     sweep_restore_orphans()
 
     # Phase 1: stage every restore next to its destination (all-or-nothing).
-    # If any copy fails, nothing has been replaced yet.
+    # If any copy or hash fails, nothing has been replaced yet.
     staged = []
     try:
-        for entry, backup_file in resolved:
+        for entry, backup_file, backup_hash in resolved:
             target = entry["path"]
             os.makedirs(os.path.dirname(target), exist_ok=True)
             temp = f"{target}.isoform-restore-{uuid.uuid4().hex[:8]}"
             shutil.copy2(backup_file, temp)
-            backup_hash = entry["sha256"]
-            expected_new = entry.get("post_sha256") or backup_hash
-            staged.append((entry, backup_hash, expected_new, temp))
+            if sha256_file(temp) != backup_hash:
+                try:
+                    os.remove(temp)
+                except OSError:
+                    pass
+                raise BackupError(f"la copia de staging no coincide: {backup_file}")
+            staged.append((entry, backup_hash, temp))
     except OSError as exc:
-        for _entry, _hash, _expected, temp in staged:
+        for _entry, _hash, temp in staged:
             try:
                 os.remove(temp)
             except OSError:
                 pass
         raise BackupError(f"No se pudo preparar la restauración (nada restaurado): {exc}")
+    except BackupError:
+        for _entry, _hash, temp in staged:
+            try:
+                os.remove(temp)
+            except OSError:
+                pass
+        raise
 
     # Phase 2: move the staged files into place (rename, no copy). Any failure
     # rolls back every entry already touched, so nothing is left half-restored.
     restored = 0
     failures = 0
     applied = []
-    for index, (entry, backup_hash, expected_new, temp) in enumerate(staged):
+    rollback_errors = []
+    for index, (entry, backup_hash, temp) in enumerate(staged):
         try:
             if entry["op"] == "rename":
                 new_path = entry["new_path"]
                 if os.path.exists(new_path):
-                    if not _owns_backup_file(new_path, expected_new):
+                    post = entry.get("post_sha256")
+                    if not post or not _owns_backup_file(new_path, post):
                         raise BackupError(
-                            f"conflicto: {new_path} ya no es el acceso original; no se toca")
+                            f"conflicto: {new_path} no es el archivo del rename aprobado; no se toca")
                     applied.append((new_path, _snapshot_file(new_path)))
                     os.remove(new_path)
                     _notify_file(new_path)
@@ -698,15 +716,20 @@ def restore_backup(backup_dir, dry_run=False):
         except (OSError, BackupError) as exc:
             failures += 1
             print(f"  [WARN] no se pudo restaurar {entry['path']}: {exc}")
-            for _e, _h, _x, leftover in staged[index:]:
+            for _e, _h, leftover in staged[index:]:
                 try:
                     os.remove(leftover)
                 except OSError:
                     pass
             for path, snap in reversed(applied):
-                _restore_snapshot(path, snap)
+                if not _restore_snapshot(path, snap):
+                    rollback_errors.append(path)
             applied = []
             break
+    if rollback_errors:
+        raise BackupError(
+            "reversión incompleta; conserva los archivos .isoform-restore-* para "
+            "recuperación: " + ", ".join(rollback_errors))
     if not failures:
         for _path, snap in applied:
             if snap and os.path.exists(snap):

@@ -83,10 +83,11 @@ Exit codes: `0` ok · `1` runtime/dependency error · `2` configuration error.
 Each `entries[]` item is `{op, path, backup, sha256}` (+ `new_path` and, after a
 successful rename, `post_sha256` for `op:"rename"`), where `op` is `modify`,
 `delete` or `rename`. Manifests are schema 2 and every entry requires its
-SHA-256. Restoring copies `files/<backup>` back to `path`; for renames it
-removes `new_path` first, but only after verifying that file still matches the
-recorded hash, and it verifies the restored bytes afterwards — any mismatch is
-rolled back.
+SHA-256. Preflight verifies every backup file against its hash before anything
+is touched; restoring copies `files/<backup>` back to `path`, re-hashes the
+restored bytes and rolls back on mismatch. A renamed `new_path` is removed only
+when its `post_sha256` (recorded by an approved, successful rename) exists and
+matches; otherwise the entry fails safe and the file is preserved.
 
 ## `theme.json`
 

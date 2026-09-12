@@ -222,6 +222,21 @@ def test_restore_keeps_foreign_file_at_renamed_destination(tmp_path, monkeypatch
     assert not list(desktop.glob("*.isoform-restore-*"))
 
 
+def test_restore_preserves_identical_copy_without_post_hash(tmp_path, monkeypatch):
+    desktop = _desktop(tmp_path, monkeypatch)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "appdata"))
+    original = desktop / "a.lnk"
+    hidden = desktop / "\u00a0.lnk"
+    original.write_bytes(b"original")
+    backup = create_backup({"persist_key": "T_Key"},
+                           [{"op": "rename", "path": str(original), "new_path": str(hidden)}])
+    os.replace(original, hidden)  # byte-identical, but not an approved rename
+
+    assert restore_backup(backup, dry_run=False) == 1
+    assert hidden.read_bytes() == b"original"
+    assert not original.exists()
+
+
 def test_restore_rolls_back_when_a_later_replace_fails(tmp_path, monkeypatch):
     import icon_engine
 
@@ -253,7 +268,22 @@ def test_restore_rolls_back_when_a_later_replace_fails(tmp_path, monkeypatch):
     assert not list(desktop.glob("*.isoform-restore-*"))
 
 
-def test_restore_detects_corrupted_restored_bytes(tmp_path, monkeypatch):
+def test_restore_rejects_tampered_backup_before_mutation(tmp_path, monkeypatch):
+    desktop = _desktop(tmp_path, monkeypatch)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "appdata"))
+    victim = desktop / "a.lnk"
+    victim.write_bytes(b"A0")
+    backup = create_backup({"persist_key": "T_Key"}, [{"op": "modify", "path": str(victim)}])
+    victim.write_bytes(b"A1")
+    for copied in (tmp_path / "appdata").rglob("0000_a.lnk"):
+        copied.write_bytes(b"tampered")
+
+    with pytest.raises(BackupError):
+        restore_backup(backup, dry_run=False)
+    assert victim.read_bytes() == b"A1"
+
+
+def test_restore_rejects_corrupted_staging_copy(tmp_path, monkeypatch):
     import icon_engine
 
     desktop = _desktop(tmp_path, monkeypatch)
@@ -272,7 +302,8 @@ def test_restore_detects_corrupted_restored_bytes(tmp_path, monkeypatch):
                 fh.write(b"X")
 
     monkeypatch.setattr(icon_engine.shutil, "copy2", corrupted)
-    assert restore_backup(backup, dry_run=False) == 1
+    with pytest.raises(BackupError):
+        restore_backup(backup, dry_run=False)
     assert victim.read_bytes() == b"A1"
     assert not list(desktop.glob("*.isoform-restore-*"))
 
