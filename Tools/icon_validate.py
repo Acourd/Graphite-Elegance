@@ -87,15 +87,19 @@ def _png_errors(payload, w, h):
         return errors + ["sin IHDR"]
     if not seen_iend:
         errors.append("sin IEND")
+    if not idat:
+        errors.append("sin IDAT")
     pw, ph, depth, color, comp, filt, interlace = header
     if (pw, ph) != (w, h):
         errors.append(f"dimensiones PNG {pw}x{ph} != {w}x{h}")
     if comp != 0 or filt != 0:
         errors.append("compresión/filtro PNG no soportados")
+    if interlace != 0:
+        errors.append("PNG entrelazado no soportado")
     channels = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}.get(color)
     if channels is None:
         errors.append(f"color type PNG inválido ({color})")
-    elif interlace == 0 and idat:
+    elif idat:
         rowbytes = (pw * depth * channels + 7) // 8
         expected = ph * (1 + rowbytes)
         try:

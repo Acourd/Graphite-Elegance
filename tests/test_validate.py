@@ -149,6 +149,36 @@ def test_read_ico_sizes_rejects_bad_png_crc(tmp_path):
     assert "CRC" in err
 
 
+def _single_frame_ico(payload):
+    return (struct.pack("<HHH", 0, 1, 1)
+            + struct.pack("<BBBBHHII", 0, 0, 0, 0, 1, 32, len(payload), 22)
+            + payload)
+
+
+def test_read_ico_sizes_rejects_png_without_idat(tmp_path):
+    payload = (b"\x89PNG\r\n\x1a\n"
+               + _png_chunk(b"IHDR", struct.pack(">IIBBBBB", 256, 256, 8, 6, 0, 0, 0))
+               + _png_chunk(b"IEND", b""))
+    p = tmp_path / "noidat.ico"
+    p.write_bytes(_single_frame_ico(payload))
+    sizes, err = read_ico_sizes(str(p))
+    assert sizes == [256] and err is not None
+    assert "IDAT" in err
+
+
+def test_read_ico_sizes_rejects_interlaced_png(tmp_path):
+    raw = b"\x00" * (256 * (1 + 256 * 4))
+    payload = (b"\x89PNG\r\n\x1a\n"
+               + _png_chunk(b"IHDR", struct.pack(">IIBBBBB", 256, 256, 8, 6, 0, 0, 1))
+               + _png_chunk(b"IDAT", zlib.compress(raw))
+               + _png_chunk(b"IEND", b""))
+    p = tmp_path / "interlaced.ico"
+    p.write_bytes(_single_frame_ico(payload))
+    sizes, err = read_ico_sizes(str(p))
+    assert sizes == [256] and err is not None
+    assert "entrelazado" in err
+
+
 # --- regression: relpath across Windows drives (C: repo vs D: tmp) ---------
 def test_rel_falls_back_to_absolute_across_drives(monkeypatch):
     import icon_validate
