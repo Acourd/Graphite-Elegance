@@ -132,8 +132,14 @@ def test_organize_records_post_hash_for_restore(world):
     assert len(invisible) == 1
 
     backups = glob.glob(str(desktop.parent / "appdata" / "Icons_Engine" / "backups" / "Test_Key" / "*"))
-    assert backups
-    assert restore_backup(sorted(backups)[-1], dry_run=False) == 0
+    rename_backups = []
+    for path in backups:
+        with open(os.path.join(path, "manifest.json"), encoding="utf-8") as fh:
+            data = json.load(fh)
+        if any(e.get("op") == "rename" for e in data.get("entries", [])):
+            rename_backups.append(path)
+    assert rename_backups
+    assert restore_backup(rename_backups[0], dry_run=False) == 0
     assert (desktop / "Chrome.url").is_file()
     assert not any(f.startswith("\u00a0") for f in os.listdir(desktop))
 
