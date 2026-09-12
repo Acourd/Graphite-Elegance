@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import argparse
 import glob
+import hashlib
 import json
 import os
 import re
@@ -109,6 +110,14 @@ def _notify_shell():
     ctypes.windll.shell32.SHChangeNotify(0x08000000, 0x0000, None, None)
 
 
+def sha256_file(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 16), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 # ---------------------------------------------------------------------------
 # Desktop roots
 # ---------------------------------------------------------------------------
@@ -135,9 +144,9 @@ def appdata_dir():
 
 
 def is_within(path, roots):
-    ap = os.path.abspath(path)
+    ap = os.path.realpath(path)
     for root in roots:
-        root = os.path.abspath(root)
+        root = os.path.realpath(root)
         try:
             if ap != root and os.path.commonpath([ap, root]) == root:
                 return True
@@ -304,6 +313,15 @@ def _norm_win_path(value):
     return (value or "").replace("/", "\\").strip().lower()
 
 
+def _same_icon_location(current, target_path, ext):
+    path, index = _split_icon_ref(current)
+    if not path or _norm_win_path(path) != _norm_win_path(target_path):
+        return False
+    if ext == ".lnk":
+        return index in (None, 0)
+    return True
+
+
 def shortcut_identity(shell, path):
     """Full identity so distinct shortcuts are never deduped by mistake."""
     ext = os.path.splitext(path)[1].lower()
@@ -340,6 +358,12 @@ STEAM_APP_MAP = {
     "1460040": "mini cozy room", "1987080": "inside the backrooms", "3241660": "repo",
 }
 
+GENERIC_STEMS = {
+    "app", "application", "bootstrapper", "client", "helper", "index", "install",
+    "installer", "launcher", "loader", "main", "portal", "run", "service", "setup",
+    "start", "startup", "uninstall", "uninstaller", "update", "updater",
+}
+
 
 def _resolve_lnk(sc, shortcut_path, available):
     name = os.path.splitext(os.path.basename(shortcut_path))[0]
@@ -352,6 +376,8 @@ def _resolve_lnk(sc, shortcut_path, available):
     target = (sc.TargetPath or "").replace("/", "\\")
     segs = {os.path.splitext(s)[0].lower() for s in target.split("\\") if s}
     for seg in sorted(segs, key=len, reverse=True):
+        if seg in GENERIC_STEMS:
+            continue
         hit = _lookup(seg, available)
         if hit:
             return hit
@@ -450,8 +476,9 @@ def create_backup(cfg, entries):
         if not os.path.isfile(src):
             continue
         rel = f"{i:04d}_{os.path.basename(src)}"
-        shutil.copy2(src, os.path.join(files_dir, rel))
-        item = {"op": entry["op"], "path": src, "backup": rel}
+        copied = os.path.join(files_dir, rel)
+        shutil.copy2(src, copied)
+        item = {"op": entry["op"], "path": src, "backup": rel, "sha256": sha256_file(copied)}
         if entry["op"] == "rename":
             item["new_path"] = entry["new_path"]
         manifest_entries.append(item)
@@ -497,6 +524,14 @@ def validate_manifest(data, backup_dir):
         path = entry.get("path")
         if not isinstance(path, str) or not is_within(path, roots):
             raise BackupError(f"Ruta restaurable fuera del escritorio permitido: {path!r}")
+        digest = entry.get("sha256")
+        if digest is not None and (not isinstance(digest, str)
+                                   or not re.fullmatch(r"[0-9a-f]{64}", digest)):
+            raise BackupError("Hash de backup inválido")
+        post = entry.get("post_sha256")
+        if post is not None and (not isinstance(post, str)
+                                 or not re.fullmatch(r"[0-9a-f]{64}", post)):
+            raise BackupError("Hash post-aplicación inválido")
         _safe_backup_file(backup_dir, entry.get("backup", ""))
         if op == "rename":
             new_path = entry.get("new_path")
@@ -543,6 +578,57 @@ def sweep_restore_orphans(min_age=RESTORE_ORPHAN_MIN_AGE):
     return removed
 
 
+def _snapshot_file(path):
+    if not os.path.isfile(path):
+        return None
+    snap = f"{path}.isoform-restore-{uuid.uuid4().hex[:8]}"
+    shutil.copy2(path, snap)
+    return snap
+
+
+def _restore_snapshot(path, snap):
+    try:
+        if snap is None:
+            if os.path.isfile(path):
+                os.remove(path)
+        else:
+            os.replace(snap, path)
+        _notify_file(path)
+    except OSError as exc:
+        print(f"  [WARN] no se pudo revertir {path}: {exc}")
+
+
+def record_post_hashes(backup_dir, renames):
+    """Pin the expected content of renamed shortcuts after a successful apply."""
+    manifest_path = os.path.join(backup_dir, "manifest.json")
+    try:
+        with open(manifest_path, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, json.JSONDecodeError):
+        return
+    by_new = {os.path.normcase(r["new_path"]): r for r in renames}
+    for entry in data.get("entries", []):
+        if entry.get("op") != "rename":
+            continue
+        target = by_new.get(os.path.normcase(entry.get("new_path", "")))
+        if target and os.path.isfile(target["new_path"]):
+            entry["post_sha256"] = sha256_file(target["new_path"])
+    try:
+        with open(manifest_path, "w", encoding="utf-8") as fh:
+            json.dump(data, fh, indent=2, ensure_ascii=False)
+    except OSError:
+        pass
+
+
+def _owns_backup_file(path, expected):
+    if not os.path.isfile(path):
+        return False
+    try:
+        return sha256_file(path) == expected
+    except OSError:
+        return False
+
+
 def restore_backup(backup_dir, dry_run=False):
     manifest_path = os.path.join(backup_dir, "manifest.json")
     if not os.path.isfile(manifest_path):
@@ -576,35 +662,56 @@ def restore_backup(backup_dir, dry_run=False):
             os.makedirs(os.path.dirname(target), exist_ok=True)
             temp = f"{target}.isoform-restore-{uuid.uuid4().hex[:8]}"
             shutil.copy2(backup_file, temp)
-            staged.append((entry, temp))
+            expected = (entry.get("post_sha256") or entry.get("sha256")
+                        or sha256_file(backup_file))
+            staged.append((entry, backup_file, expected, temp))
     except OSError as exc:
-        for _entry, temp in staged:
+        for _entry, _backup, _expected, temp in staged:
             try:
                 os.remove(temp)
             except OSError:
                 pass
         raise BackupError(f"No se pudo preparar la restauración (nada restaurado): {exc}")
 
-    # Phase 2: move the staged files into place (rename, no copy).
+    # Phase 2: move the staged files into place (rename, no copy). Any failure
+    # rolls back every entry already touched, so nothing is left half-restored.
     restored = 0
     failures = 0
-    for entry, temp in staged:
+    applied = []
+    for index, (entry, _backup, expected, temp) in enumerate(staged):
         try:
             if entry["op"] == "rename":
                 new_path = entry["new_path"]
                 if os.path.exists(new_path):
+                    if not _owns_backup_file(new_path, expected):
+                        raise BackupError(
+                            f"conflicto: {new_path} ya no es el acceso original; no se toca")
+                    applied.append((new_path, _snapshot_file(new_path)))
                     os.remove(new_path)
                     _notify_file(new_path)
+            applied.append((entry["path"], _snapshot_file(entry["path"])))
             os.replace(temp, entry["path"])
             _notify_file(entry["path"])
             restored += 1
-        except OSError as exc:
+        except (OSError, BackupError) as exc:
             failures += 1
             print(f"  [WARN] no se pudo restaurar {entry['path']}: {exc}")
-            try:
-                os.remove(temp)
-            except OSError:
-                pass
+            for _e, _b, _x, leftover in staged[index:]:
+                try:
+                    os.remove(leftover)
+                except OSError:
+                    pass
+            for path, snap in reversed(applied):
+                _restore_snapshot(path, snap)
+            applied = []
+            break
+    if not failures:
+        for _path, snap in applied:
+            if snap and os.path.exists(snap):
+                try:
+                    os.remove(snap)
+                except OSError:
+                    pass
     _notify_shell()
     print(f"\nRestaurados {restored} elementos desde {backup_dir}.")
     if failures:
@@ -656,6 +763,27 @@ def _publish_icons(cfg):
         return src
     print(f"  [INFO] Iconos publicados en: {dest}")
     return dest
+
+
+def _tree_drift(src, dest):
+    """Relative paths of icons missing from (or different in) the published tree."""
+    drift = []
+    for root, _dirs, files in os.walk(src):
+        for fname in sorted(files):
+            if not fname.lower().endswith(".ico"):
+                continue
+            full = os.path.join(root, fname)
+            rel = os.path.relpath(full, src)
+            other = os.path.join(dest, rel)
+            if not os.path.isfile(other):
+                drift.append(rel)
+                continue
+            try:
+                if os.path.getsize(other) != os.path.getsize(full) or sha256_file(other) != sha256_file(full):
+                    drift.append(rel)
+            except OSError:
+                drift.append(rel)
+    return drift
 
 
 # ---------------------------------------------------------------------------
@@ -714,10 +842,10 @@ def plan_apply(cfg, available, shell, target_dir, cleanup=False, rename=False):
                 continue
             rel = os.path.relpath(icon_path, cfg["icons_path"])
             target_path = os.path.join(target_dir, rel)
-            desired = f"{target_path}, 0" if ext == ".lnk" else target_path
             matched.append({"path": path, "ext": ext, "icon_path": icon_path,
                             "icon_rel": rel, "target_path": target_path,
-                            "label": label, "changed": current != desired})
+                            "label": label,
+                            "changed": not _same_icon_location(current, target_path, ext)})
 
     changes = [m for m in matched if m["changed"]]
     renames = []
@@ -750,13 +878,17 @@ def apply_theme(cfg, dry_run=False, cleanup=False, rename=False, yes=False,
     available = index_icons(cfg["icons_path"], allow_duplicates=allow_duplicate_icons)
     print(f"=== {cfg['name']} ===  ({len(available)} claves de icono)")
 
+    published_dir = _published_icons_dir(cfg)
+    drift = _tree_drift(cfg["icons_path"], published_dir)
+
     pythoncom.CoInitialize()
     shell = win32com.client.Dispatch("WScript.Shell")
     dup_deletions, changes, renames, unmatched = plan_apply(
-        cfg, available, shell, _published_icons_dir(cfg), cleanup=cleanup, rename=rename)
+        cfg, available, shell, published_dir, cleanup=cleanup, rename=rename)
 
     print(f"\nPlan: {len(changes)} iconos · {len(dup_deletions)} duplicados a borrar"
-          f" · {len(renames)} renombrados · limpieza={'sí' if cleanup else 'no'}"
+          f" · {len(renames)} renombrados · {len(drift)} assets a sincronizar"
+          f" · limpieza={'sí' if cleanup else 'no'}"
           f" · renombrado={'sí' if rename else 'no'}")
     if dry_run:
         for c in changes:
@@ -765,6 +897,8 @@ def apply_theme(cfg, dry_run=False, cleanup=False, rename=False, yes=False,
             print(f"  [DRY] eliminaría duplicado: {os.path.basename(p)}")
         for r in renames:
             print(f"  [DRY] renombraría {os.path.basename(r['path'])}")
+        for rel in drift:
+            print(f"  [DRY] publicaría {rel}")
         if unmatched:
             print("  sin coincidencia:", ", ".join(sorted(set(unmatched))[:20]))
         shell = None
@@ -772,7 +906,7 @@ def apply_theme(cfg, dry_run=False, cleanup=False, rename=False, yes=False,
         return 0
 
     total = len(changes) + len(dup_deletions) + len(renames)
-    if total == 0:
+    if total == 0 and not drift:
         print("Nada que hacer.")
         shell = None
         pythoncom.CoUninitialize()
@@ -786,10 +920,25 @@ def apply_theme(cfg, dry_run=False, cleanup=False, rename=False, yes=False,
             pythoncom.CoUninitialize()
             return 0
 
-    # Publish only after confirmation, via staging + atomic replace.
-    published = _publish_icons(cfg)
+    # Publish only after confirmation, via staging + atomic replace. Assets are
+    # re-synced even when no shortcut needs changes (repairs a damaged or stale
+    # published tree) and never trigger a shortcut backup by themselves.
+    published = published_dir
+    if drift:
+        published = _publish_icons(cfg)
+        if os.path.normcase(published) != os.path.normcase(published_dir):
+            shell = None
+            pythoncom.CoUninitialize()
+            return 1
     for c in changes:
         c["icon_path"] = os.path.join(published, c["icon_rel"])
+
+    if total == 0:
+        _notify_shell()
+        shell = None
+        pythoncom.CoUninitialize()
+        print(f"\nIconos publicados sincronizados: {len(drift)} archivos.")
+        return 0
 
     # --- Backup BEFORE any mutation (merging rename over modify per path) ---
     by_path = {}
@@ -854,6 +1003,9 @@ def apply_theme(cfg, dry_run=False, cleanup=False, rename=False, yes=False,
         except OSError as exc:
             failures += 1
             print(f"  [WARN] no se pudo renombrar {os.path.basename(r['path'])}: {exc}")
+
+    if renames:
+        record_post_hashes(backup_dir, renames)
 
     shell = None
     pythoncom.CoUninitialize()

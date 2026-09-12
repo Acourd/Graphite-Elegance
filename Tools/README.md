@@ -44,9 +44,19 @@ Exit codes: `0` ok · `1` runtime/dependency error · `2` configuration error.
 
 - **Backup before mutation.** The manifest and copies of every affected file are
   written **before** any change (icon edits, deletions and renames).
-- **Validated restore.** `--restore` validates the manifest schema, restricts
-  every path to an allowed Desktop root (user + public, or `ISO_DESKTOP_DIRS`)
-  and rewrites from the backed-up files — including the original names.
+- **Validated, all-or-nothing restore.** `--restore` validates the manifest
+  schema (including per-file hashes), restricts every path to an allowed
+  Desktop root (user + public, or `ISO_DESKTOP_DIRS`) and restores from the
+  backed-up files — including the original names. A renamed destination is
+  only removed when it still matches the recorded hash; otherwise the entry
+  fails safe and nothing else is touched. If any step fails, everything
+  already restored is rolled back.
+- **Published icons are re-synced.** Every run compares the source icon tree
+  with `%LOCALAPPDATA%\Icons_Engine\Themes\<key>\Icons` and republishes when
+  assets are missing or changed, even if no shortcut needs an update (a
+  damaged publication is repaired without touching shortcuts or backups).
+- **Idempotent re-apply.** The stored icon index is parsed when comparing, so a
+  second run over an already-applied theme reports nothing to do.
 - **Theme-scoped rename/organize.** `--rename` only renames shortcuts matched to
   the active theme; `--organize` only considers shortcuts whose current icon
   belongs to the theme.
@@ -69,9 +79,11 @@ Exit codes: `0` ok · `1` runtime/dependency error · `2` configuration error.
     └── 0000_Chrome.url    # exact copy of the original file
 ```
 
-Each `entries[]` item is `{op, path, backup}` (+ `new_path` for `op:"rename"`),
-where `op` is `modify`, `delete` or `rename`. Restoring copies `files/<backup>`
-back to `path` and, for renames, removes `new_path` first.
+Each `entries[]` item is `{op, path, backup, sha256}` (+ `new_path` and, after a
+successful rename, `post_sha256` for `op:"rename"`), where `op` is `modify`,
+`delete` or `rename`. Restoring copies `files/<backup>` back to `path`; for
+renames it removes `new_path` first, but only after verifying that file still
+matches the recorded hash.
 
 ## `theme.json`
 
@@ -108,8 +120,10 @@ Unknown keys are rejected (no silently-ignored config).
 ## Validation
 
 `Tools/icon_validate.py` is the CI gate (pure Python, cross-platform). It checks
-that every released `.ico` contains 16/32/48/64/128/256 and that names are unique
-within a variant:
+that every variant contains `.ico` files, that each one includes
+16/32/48/64/128/256, that names are unique within a variant, and that every
+frame actually decodes (PNG chunk CRCs + IDAT decompression; BMP header,
+geometry and pixel-data bounds):
 
 ```bat
 python Tools\icon_validate.py --all

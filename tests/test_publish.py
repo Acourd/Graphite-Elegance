@@ -1,7 +1,7 @@
 import os
 import shutil
 
-from icon_engine import _publish_icons, _published_icons_dir
+from icon_engine import _publish_icons, _published_icons_dir, _tree_drift
 
 
 def _theme_dir(tmp_path):
@@ -9,6 +9,17 @@ def _theme_dir(tmp_path):
     src.mkdir(parents=True)
     (src / "Chrome.ico").write_bytes(b"new")
     return src
+
+
+def test_tree_drift_detects_missing_and_changed(tmp_path):
+    src = _theme_dir(tmp_path)
+    dest = tmp_path / "published"
+    dest.mkdir()
+    assert _tree_drift(str(src), str(dest)) == ["Chrome.ico"]
+    (dest / "Chrome.ico").write_bytes(b"new")
+    assert _tree_drift(str(src), str(dest)) == []
+    (dest / "Chrome.ico").write_bytes(b"old")
+    assert _tree_drift(str(src), str(dest)) == ["Chrome.ico"]
 
 
 def test_publish_replaces_after_a_full_copy(tmp_path, monkeypatch):

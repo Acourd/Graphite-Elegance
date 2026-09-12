@@ -64,6 +64,27 @@ def test_apply_backup_and_restore(world):
     assert not any(f.startswith("\u00a0") for f in os.listdir(desktop))
 
 
+def test_apply_repairs_published_tree_without_shortcut_changes(world):
+    from icon_engine import _published_icons_dir
+
+    desktop, cfg = world
+    (desktop / "Chrome.url").write_text(_url("Chrome", "https://example.com/"), encoding="utf-8")
+    assert apply_theme(cfg, yes=True, rename=False, cleanup=False) == 0
+
+    published = _published_icons_dir(cfg)
+    icon = os.path.join(published, "Chrome.ico")
+    assert os.path.isfile(icon)
+    os.remove(icon)
+
+    backups_root = str(desktop.parent / "appdata" / "Icons_Engine" / "backups" / "Test_Key")
+    before = set(glob.glob(os.path.join(backups_root, "*")))
+
+    assert apply_theme(cfg, yes=True, rename=False, cleanup=False) == 0
+    assert os.path.isfile(icon), "la publicación dañada debe repararse"
+    after = set(glob.glob(os.path.join(backups_root, "*")))
+    assert after == before, "republicar no debe crear backups"
+
+
 def test_rename_only_touches_theme_shortcuts(world):
     desktop, cfg = world
     (desktop / "Chrome.url").write_text(_url("Chrome", "https://example.com/"), encoding="utf-8")

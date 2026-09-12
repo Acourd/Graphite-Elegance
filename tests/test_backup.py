@@ -191,6 +191,54 @@ def test_restore_is_all_or_nothing_on_copy_failure(tmp_path, monkeypatch):
     assert second.read_bytes() == b"B1"
 
 
+def test_restore_keeps_foreign_file_at_renamed_destination(tmp_path, monkeypatch):
+    desktop = _desktop(tmp_path, monkeypatch)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "appdata"))
+    original = desktop / "a.lnk"
+    hidden = desktop / "\u00a0.lnk"
+    original.write_bytes(b"original")
+    backup = create_backup({"persist_key": "T_Key"},
+                           [{"op": "rename", "path": str(original), "new_path": str(hidden)}])
+    os.replace(original, hidden)
+    hidden.write_bytes(b"user content")  # the user replaced the renamed shortcut
+
+    assert restore_backup(backup, dry_run=False) == 1
+    assert hidden.read_bytes() == b"user content"  # never deleted
+    assert not original.exists()
+    assert not list(desktop.glob("*.isoform-restore-*"))
+
+
+def test_restore_rolls_back_when_a_later_replace_fails(tmp_path, monkeypatch):
+    import icon_engine
+
+    desktop = _desktop(tmp_path, monkeypatch)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "appdata"))
+    first = desktop / "a.lnk"
+    second = desktop / "b.lnk"
+    first.write_bytes(b"A0")
+    second.write_bytes(b"B0")
+    backup = create_backup({"persist_key": "T_Key"},
+                           [{"op": "modify", "path": str(first)},
+                            {"op": "modify", "path": str(second)}])
+    first.write_bytes(b"A1")
+    second.write_bytes(b"B1")
+
+    real_replace = os.replace
+    state = {"failed": False}
+
+    def flaky(src, dst, *args, **kwargs):
+        if not state["failed"] and os.path.abspath(dst) == str(second):
+            state["failed"] = True
+            raise OSError("locked")
+        return real_replace(src, dst, *args, **kwargs)
+
+    monkeypatch.setattr(icon_engine.os, "replace", flaky)
+    assert restore_backup(backup, dry_run=False) == 1
+    assert first.read_bytes() == b"A1"
+    assert second.read_bytes() == b"B1"
+    assert not list(desktop.glob("*.isoform-restore-*"))
+
+
 # --- regression: orphan sweep must be strict, scoped and age-limited --------
 def test_orphan_sweep_is_strict_and_age_limited(tmp_path, monkeypatch):
     import icon_engine

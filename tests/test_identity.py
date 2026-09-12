@@ -1,4 +1,11 @@
-from icon_engine import _icon_file_from_raw, _key_from_icon_path, _read_url, shortcut_identity
+from icon_engine import (
+    _icon_file_from_raw,
+    _key_from_icon_path,
+    _read_url,
+    _resolve_lnk,
+    _same_icon_location,
+    shortcut_identity,
+)
 
 
 class FakeShortcut:
@@ -110,3 +117,34 @@ def test_url_identity_case_sensitive(tmp_path):
     f2 = tmp_path / "b.url"
     f2.write_text("[InternetShortcut]\nURL=https://example.com/case\n", encoding="utf-8")
     assert shortcut_identity(None, str(f1)) != shortcut_identity(None, str(f2))
+
+
+# --- regression: re-applying the same theme must be a no-op -----------------
+def test_same_icon_location_normalizes_windows_form():
+    assert _same_icon_location(r"C:\a\X.ico,0", r"C:\A\x.ico", ".lnk")
+    assert _same_icon_location(r"C:\a\X.ico, 0", r"C:\a\X.ico", ".lnk")
+    assert _same_icon_location(r"C:\a\X.ico", r"C:\a\X.ico", ".lnk")
+    assert not _same_icon_location(r"C:\a\X.ico,1", r"C:\a\X.ico", ".lnk")
+    assert not _same_icon_location(r"C:\b\X.ico,0", r"C:\a\X.ico", ".lnk")
+    assert not _same_icon_location("", r"C:\a\X.ico", ".lnk")
+    assert _same_icon_location(r"C:\a\X.ico", r"C:\a\X.ico", ".url")
+
+
+# --- regression: generic executable stems must not steal icon matches -------
+class _SC:
+    def __init__(self, target, icon=""):
+        self.TargetPath = target
+        self.IconLocation = icon
+        self.Arguments = ""
+        self.WorkingDirectory = ""
+
+
+def test_resolve_lnk_skips_generic_target_stems():
+    available = {"update": r"C:\icons\Update.ico", "discord": r"C:\icons\Discord.ico"}
+    assert _resolve_lnk(_SC(r"C:\Apps\Update.exe"), "x.lnk", available) is None
+
+
+def test_resolve_lnk_matches_specific_target_stems():
+    available = {"ccleaner": r"C:\icons\Ccleaner.ico"}
+    assert _resolve_lnk(_SC(r"C:\Program Files\CCleaner\CCleaner.exe"),
+                        "CCleaner 7.lnk", available) == r"C:\icons\Ccleaner.ico"
