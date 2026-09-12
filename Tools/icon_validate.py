@@ -55,7 +55,7 @@ def _rel(path, start):
 
 # ---------------------------------------------------------------------------
 def _png_errors(payload, w, h):
-    """Deep PNG check: chunk CRCs, IHDR, IEND and a real IDAT decompression."""
+    """Deep PNG check: chunks, CRC, IHDR/PLTE and full filter reconstruction."""
     errors = []
     if not payload.startswith(b"\x89PNG\r\n\x1a\n"):
         return ["no es PNG"]
@@ -63,6 +63,7 @@ def _png_errors(payload, w, h):
     idat = b""
     header = None
     seen_iend = False
+    has_palette = False
     while pos + 8 <= len(payload):
         length, ctype = struct.unpack_from(">I4s", payload, pos)
         pos += 8
@@ -78,6 +79,8 @@ def _png_errors(payload, w, h):
                 errors.append("IHDR inválido")
                 return errors
             header = struct.unpack(">IIBBBBB", body)
+        elif ctype == b"PLTE":
+            has_palette = True
         elif ctype == b"IDAT":
             idat += body
         elif ctype == b"IEND":
@@ -98,17 +101,55 @@ def _png_errors(payload, w, h):
         errors.append("PNG entrelazado no soportado")
     channels = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}.get(color)
     if channels is None:
-        errors.append(f"color type PNG inválido ({color})")
-    elif idat:
-        rowbytes = (pw * depth * channels + 7) // 8
-        expected = ph * (1 + rowbytes)
-        try:
-            raw = zlib.decompress(idat)
-        except zlib.error as exc:
-            errors.append(f"IDAT no descomprime: {exc}")
-        else:
-            if len(raw) != expected:
-                errors.append(f"IDAT descomprimido {len(raw)} bytes != {expected}")
+        return errors + [f"color type PNG inválido ({color})"]
+    if color == 3 and not has_palette:
+        errors.append("PNG indexado sin PLTE")
+    depths = {0: (1, 2, 4, 8, 16), 2: (8, 16), 3: (1, 2, 4, 8),
+              4: (8, 16), 6: (8, 16)}
+    if depth not in depths[color]:
+        errors.append(f"combinación IHDR inválida (color {color}, depth {depth})")
+    if errors or not idat:
+        return errors
+    try:
+        raw = zlib.decompress(idat)
+    except zlib.error as exc:
+        return errors + [f"IDAT no descomprime: {exc}"]
+    bits = depth * channels
+    rowbytes = (pw * bits + 7) // 8
+    filter_bytes = max(1, (bits + 7) // 8)
+    expected = ph * (1 + rowbytes)
+    if len(raw) != expected:
+        return errors + [f"IDAT descomprimido {len(raw)} bytes != {expected}"]
+    prev = bytearray(rowbytes)
+    offset = 0
+    for y in range(ph):
+        ftype = raw[offset]
+        offset += 1
+        if ftype > 4:
+            errors.append(f"filtro PNG inválido ({ftype}) en la fila {y}")
+            break
+        row = bytearray(raw[offset:offset + rowbytes])
+        offset += rowbytes
+        if ftype == 1:
+            for i in range(filter_bytes, rowbytes):
+                row[i] = (row[i] + row[i - filter_bytes]) & 0xff
+        elif ftype == 2:
+            for i in range(rowbytes):
+                row[i] = (row[i] + prev[i]) & 0xff
+        elif ftype == 3:
+            for i in range(rowbytes):
+                left = row[i - filter_bytes] if i >= filter_bytes else 0
+                row[i] = (row[i] + ((left + prev[i]) >> 1)) & 0xff
+        elif ftype == 4:
+            for i in range(rowbytes):
+                a = row[i - filter_bytes] if i >= filter_bytes else 0
+                b = prev[i]
+                c = prev[i - filter_bytes] if i >= filter_bytes else 0
+                p = a + b - c
+                pa, pb, pc = abs(p - a), abs(p - b), abs(p - c)
+                pred = a if (pa <= pb and pa <= pc) else (b if pb <= pc else c)
+                row[i] = (row[i] + pred) & 0xff
+        prev = row
     return errors
 
 

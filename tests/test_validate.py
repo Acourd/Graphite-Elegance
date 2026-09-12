@@ -179,6 +179,31 @@ def test_read_ico_sizes_rejects_interlaced_png(tmp_path):
     assert "entrelazado" in err
 
 
+def test_read_ico_sizes_rejects_invalid_png_filter(tmp_path):
+    raw = (b"\x05" + b"\x00" * (256 * 4)) * 256
+    payload = (b"\x89PNG\r\n\x1a\n"
+               + _png_chunk(b"IHDR", struct.pack(">IIBBBBB", 256, 256, 8, 6, 0, 0, 0))
+               + _png_chunk(b"IDAT", zlib.compress(raw))
+               + _png_chunk(b"IEND", b""))
+    p = tmp_path / "filter.ico"
+    p.write_bytes(_single_frame_ico(payload))
+    sizes, err = read_ico_sizes(str(p))
+    assert sizes == [256] and err is not None
+    assert "filtro" in err
+
+
+def test_read_ico_sizes_rejects_invalid_ihdr_combo(tmp_path):
+    payload = (b"\x89PNG\r\n\x1a\n"
+               + _png_chunk(b"IHDR", struct.pack(">IIBBBBB", 256, 256, 4, 2, 0, 0, 0))
+               + _png_chunk(b"IDAT", zlib.compress(b"\x00" * 64))
+               + _png_chunk(b"IEND", b""))
+    p = tmp_path / "combo.ico"
+    p.write_bytes(_single_frame_ico(payload))
+    sizes, err = read_ico_sizes(str(p))
+    assert sizes == [256] and err is not None
+    assert "IHDR" in err
+
+
 # --- regression: relpath across Windows drives (C: repo vs D: tmp) ---------
 def test_rel_falls_back_to_absolute_across_drives(monkeypatch):
     import icon_validate
